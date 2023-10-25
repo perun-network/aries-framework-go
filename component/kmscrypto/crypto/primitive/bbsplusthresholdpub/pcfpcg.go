@@ -4,6 +4,7 @@ import (
 	ml "github.com/IBM/mathlib"
 )
 
+// PCFPCGOutput is the precomputations created by a generator.
 type PCFPCGOutput struct {
 	Sk       *ml.Zr
 	SkShares []*ml.Zr
@@ -30,6 +31,7 @@ func GeneratePPPrecomputation(t, k, n int) (*ml.Zr, []*PerPartyPrecomputations) 
 	)
 }
 
+// GeneratePCFPCGOutput create correlated shares for bbs+ threshold calculation.
 func GeneratePCFPCGOutput(t int, k int, n int) PCFPCGOutput {
 	sk, skShares := GetShamirSharedRandomElement(t, n)
 	aShares := GetRandomElements(k, n)
@@ -42,6 +44,19 @@ func GeneratePCFPCGOutput(t int, k int, n int) PCFPCGOutput {
 	return PCFPCGOutput{sk, skShares, aShares, eShares, sShares, aeTerms, asTerms, askTerms}
 }
 
+// GeneratePCFPCGOutput create correlated shares for bbs+ threshold calculation given the generated private key.
+func GeneratePCFPCGOutputFromPrivKey(sk *ml.Zr, t int, k int, n int) PCFPCGOutput {
+	skShares := GetShamirSharedRandomElementFromPrivKey(sk, t, n)
+	aShares := GetRandomElements(k, n)
+	eShares := GetRandomElements(k, n)
+	sShares := GetRandomElements(k, n)
+	aeTerms := MakeAllPartiesOLE(k, n, aShares, eShares)
+	asTerms := MakeAllPartiesOLE(k, n, aShares, sShares)
+	askTerms := MakeAllPartiesVOLE(k, n, aShares, skShares)
+	return PCFPCGOutput{sk, skShares, aShares, eShares, sShares, aeTerms, asTerms, askTerms}
+}
+
+// CreatePPPrecomputationFromVOLEEvaluation create correlated precomputations for each party.
 func CreatePPPrecomputationFromVOLEEvaluation(
 	k int,
 	n int,
@@ -108,15 +123,4 @@ func CreatePPPrecomputationFromVOLEEvaluation(
 	}
 
 	return precomputations
-}
-
-func GeneratePCFPCGOutputFromPrivKey(sk *ml.Zr, t int, k int, n int) PCFPCGOutput {
-	skShares := GetShamirSharedRandomElementFromPrivKey(sk, t, n)
-	aShares := GetRandomElements(k, n)
-	eShares := GetRandomElements(k, n)
-	sShares := GetRandomElements(k, n)
-	aeTerms := MakeAllPartiesOLE(k, n, aShares, eShares)
-	asTerms := MakeAllPartiesOLE(k, n, aShares, sShares)
-	askTerms := MakeAllPartiesVOLE(k, n, aShares, skShares)
-	return PCFPCGOutput{sk, skShares, aShares, eShares, sShares, aeTerms, asTerms, askTerms}
 }

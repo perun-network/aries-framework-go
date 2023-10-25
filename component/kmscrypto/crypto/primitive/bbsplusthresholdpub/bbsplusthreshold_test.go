@@ -86,6 +86,7 @@ func TestBlsG2Pub_Verify(t *testing.T) {
 	})
 }
 
+//nolint:lll
 func TestBBSPlusPub_SignWithPartialSignatures(t *testing.T) {
 	pubKey, privKey, precomputations, err := generateKeyPairRandom(threshold, n, k)
 	require.NoError(t, err)
@@ -164,6 +165,7 @@ func TestBBSPlusPub_SignWithPartialSignatures(t *testing.T) {
 	require.NoError(t, bls.Verify(messagesBytes, signatureBytes, pubKeyBytes))
 }
 
+//nolint:lll
 func TestBBSPlusThresholdPub_SignWithKeyPair(t *testing.T) {
 	pubKey, privKey, _, err := generateKeyPairRandom(threshold, n, k)
 	require.NoError(t, err)
@@ -183,6 +185,7 @@ func TestBBSPlusThresholdPub_SignWithKeyPair(t *testing.T) {
 	require.NoError(t, bls.Verify(messagesBytes, signatureBytes, pubKeyBytes))
 }
 
+//nolint:lll
 func TestBBSPlusThresholdPub_Sign(t *testing.T) {
 	pubKey, privKey, _, err := generateKeyPairRandom(threshold, n, k)
 	require.NoError(t, err)
@@ -353,6 +356,8 @@ func TestBBSPlusThresholdPub_DeriveProof(t *testing.T) {
 	})
 }
 
+// generateRandomIndices create a random set of unique, unduplicated indices.
+// Returns an array of indices with size threshold and value range from 1 to numOfParties.
 func generateRandomIndices(threshold, numOfParties int) []int {
 	rng := mathrand.New(mathrand.NewSource(time.Now().UnixNano()))
 

@@ -7,6 +7,7 @@ import (
 	ml "github.com/IBM/mathlib"
 )
 
+// PartialSignature defines a partial signature of a set of messages.
 type PartialSignature struct {
 	CapitalAShare *ml.G1
 	DeltaShare    *ml.Zr

@@ -7,6 +7,7 @@ import (
 	"github.com/hyperledger/aries-framework-go/component/kmscrypto/crypto/primitive/bbsplusthresholdpub"
 )
 
+// baseSignatureSigner defines a base signature signer.
 type baseSignatureSigner struct {
 	keyType   string
 	curve     string
@@ -25,6 +26,8 @@ func (sv baseSignatureSigner) Algorithm() string {
 	return sv.algorithm
 }
 
+// ThresholdBBSG2SignaturePartySigner defines a party signer based on the baseSignatureSigner.
+// Party signer signs a credential and produces a partial signature based on its pregenerated presignature.
 type ThresholdBBSG2SignaturePartySigner struct {
 	partyPrivKeyBytes []byte
 	indices           [][]int
@@ -33,6 +36,7 @@ type ThresholdBBSG2SignaturePartySigner struct {
 	baseSignatureSigner
 }
 
+// NewThresholdBBSG2SignaturePartySigner creates a new instance of a Party Signer given its precomputation.
 func NewThresholdBBSG2SignaturePartySigner(precomputationBytes []byte) (*ThresholdBBSG2SignaturePartySigner, error) {
 	precomputation, err := bbsplusthresholdpub.ParsePerPartyPrecomputations(precomputationBytes)
 	if err != nil {
@@ -68,7 +72,7 @@ func (tbps *ThresholdBBSG2SignaturePartySigner) Alg() string {
 	return tbps.Algorithm()
 }
 
-// Sign will sign create signature of each message and aggregate it
+// Sign will sign create a partial signature of each message and aggregate it
 // into a single partial signature using the signer's precomputation.
 // returns:
 //
@@ -92,6 +96,8 @@ func (tbps *ThresholdBBSG2SignaturePartySigner) Sign(data []byte) ([]byte, error
 	return partialSigBytes, nil
 }
 
+// ThresholdBBSG2SignatureSigner defines a Signer based on the Threshold BBS+ Signature Scheme.
+// The signer produces a threshold signature based on the partial signature of the credential.
 type ThresholdBBSG2SignatureSigner struct {
 	threshold         int
 	msgIndex          int
@@ -99,6 +105,11 @@ type ThresholdBBSG2SignatureSigner struct {
 	baseSignatureSigner
 }
 
+// NewThresholdBBSG2SignatureSigner creates a new instance of a Threshold Signer.
+// Args:
+//   - threshold: the t-out-of-n number determined as the precompuations were generated.
+//   - msgIndex: the next in-line index of the message to be signed.
+//   - partialSignatures: partial signatures of the credential in bytes.
 func NewThresholdBBSG2SignatureSigner(threshold, msgIndex int,
 	partialSignatures [][]byte) *ThresholdBBSG2SignatureSigner {
 	return &ThresholdBBSG2SignatureSigner{
@@ -113,6 +124,7 @@ func NewThresholdBBSG2SignatureSigner(threshold, msgIndex int,
 	}
 }
 
+// Signs produces a threshold signatures based on its partial signatures.
 func (tbs *ThresholdBBSG2SignatureSigner) Sign(data []byte) ([]byte, error) {
 	main_bbs := bbsplusthresholdpub.New()
 	sigBytes, err := main_bbs.SignWithPartialSignatures(tbs.partialSignatures)
@@ -124,19 +136,6 @@ func (tbs *ThresholdBBSG2SignatureSigner) Sign(data []byte) ([]byte, error) {
 
 func (tbs *ThresholdBBSG2SignatureSigner) Alg() string {
 	return tbs.Algorithm()
-}
-
-func textToLines(txt string) [][]byte {
-	lines := strings.Split(txt, "\n")
-	linesBytes := make([][]byte, 0, len(lines))
-
-	for i := range lines {
-		if strings.TrimSpace(lines[i]) != "" {
-			linesBytes = append(linesBytes, []byte(lines[i]))
-		}
-	}
-
-	return linesBytes
 }
 
 func splitMessageIntoLines(msg string) [][]byte {

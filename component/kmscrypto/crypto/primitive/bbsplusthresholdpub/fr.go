@@ -52,10 +52,12 @@ func frFromOKM(message []byte) *ml.Zr {
 	return elm
 }
 
+// frToRepr produces a copy of the given Fr.
 func frToRepr(fr *ml.Zr) *ml.Zr {
 	return fr.Copy()
 }
 
+// messagesToFr turns messages from bytes to Fr from respective curves.
 func messagesToFr(messages [][]byte) []*SignatureMessage {
 	messagesFr := make([]*SignatureMessage, len(messages))
 
@@ -66,6 +68,7 @@ func messagesToFr(messages [][]byte) []*SignatureMessage {
 	return messagesFr
 }
 
+// createRandSignatureFr creates a new random Fr.
 func createRandSignatureFr() *ml.Zr {
 	return curve.NewRandomZr(rand.Reader)
 }

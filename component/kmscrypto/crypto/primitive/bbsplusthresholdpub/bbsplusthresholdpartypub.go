@@ -6,12 +6,6 @@ SPDX-License-Identifier: Apache-2.0
 
 // Package bbsplusthresholdpub contains BBS+ threshold signing primitives and keys. Although it can be used directly, it is recommended
 // to use BBS+ keys created by the kms along with the framework's Crypto service.
-//
-// The default local Crypto service is found at:
-// "github.com/hyperledger/aries-framework-go/component/kmscrypto/crypto/tinkcrypto"
-//
-// While the remote Crypto service is found at:
-// "github.com/hyperledger/aries-framework-go/component/kmscrypto/crypto/webkms"
 package bbsplusthresholdpub
 
 import (
@@ -39,7 +33,7 @@ var (
 	bbsplusThresholdLivePresignatureLen = curve.CompressedG1ByteSize + 3*frCompressedSize
 )
 
-// SignWithPresignature signs the one or more messages using BBS+ key pair.
+// SignWithPresignature produces a partial signature for messages using a Threshold BBS+ presignature.
 func (*BBSThresholdPartyPub) SignWithPresignature(
 	messages [][]byte,
 	partyPrivKey []byte,
@@ -49,11 +43,15 @@ func (*BBSThresholdPartyPub) SignWithPresignature(
 	var err error
 	privKey, err := UnmarshalPartyPrivateKey(partyPrivKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal private key: %w", err)
 	}
 
 	pubKey := privKey.PublicKey()
 	messagesCount := len(messages)
+
+	if messagesCount == 0 {
+		return nil, errors.New("messages are not defined")
+	}
 
 	pubKeyWithGenerators, err := pubKey.ToPublicKeyWithGenerators(messagesCount)
 	if err != nil {

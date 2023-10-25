@@ -241,6 +241,7 @@ func (bbs *BBSThresholdPub) SignWithKey(messages [][]byte, privKey *PrivateKey) 
 	return signature.ToBytes()
 }
 
+// SignWithPartialSignatures produces a threshold signature given the partial signatures in bytes.
 func (bbs *BBSThresholdPub) SignWithPartialSignatures(partialSignaturesBytes [][]byte) ([]byte, error) {
 	var a *ml.G1
 	delta := curve.NewZrFromInt(0)

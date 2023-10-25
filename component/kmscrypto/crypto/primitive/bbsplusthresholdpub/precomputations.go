@@ -312,6 +312,7 @@ func (ppp *PerPartyPrecomputations) ToBytes() ([]byte, error) {
 	return result, nil
 }
 
+// PartyPrivateKey produces a party private key from a precompuation.
 func (ppp *PerPartyPrecomputations) PartyPrivateKey() *PartyPrivateKey {
 	return &PartyPrivateKey{
 		SKShare:   ppp.SkShare,

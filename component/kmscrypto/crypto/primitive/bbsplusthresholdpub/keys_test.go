@@ -16,6 +16,7 @@ import (
 	bbs "github.com/hyperledger/aries-framework-go/component/kmscrypto/crypto/primitive/bbsplusthresholdpub"
 )
 
+//nolint:lll
 func TestGenerateKeyPair(t *testing.T) {
 	h := sha256.New
 
@@ -64,6 +65,7 @@ func TestGenerateKeyPair(t *testing.T) {
 	require.Nil(t, precomputations)
 }
 
+//nolint:lll
 func TestPrivateKey_Marshal(t *testing.T) {
 	_, privKey, _, err := generateKeyPairRandom(threshold, n, k)
 	require.NoError(t, err)
@@ -78,6 +80,7 @@ func TestPrivateKey_Marshal(t *testing.T) {
 	require.Equal(t, privKey, privKeyUnmarshalled)
 }
 
+//nolint:lll
 func TestPrivateKey_PublicKey(t *testing.T) {
 	pubKey, privKey, precomputations, err := generateKeyPairRandom(threshold, n, k)
 	require.NoError(t, err)
@@ -89,6 +92,7 @@ func TestPrivateKey_PublicKey(t *testing.T) {
 
 }
 
+//nolint:lll
 func TestPublicKey_Marshal(t *testing.T) {
 	pubKey, _, _, err := generateKeyPairRandom(threshold, n, k)
 	require.NoError(t, err)
@@ -103,6 +107,7 @@ func TestPublicKey_Marshal(t *testing.T) {
 	require.Equal(t, pubKey, pubKeyUnmarshalled)
 }
 
+//nolint:lll
 func TestPartyPrivateKey_Marshal(t *testing.T) {
 
 	_, _, precomputations, err := generateKeyPairRandom(threshold, n, k)
@@ -120,6 +125,7 @@ func TestPartyPrivateKey_Marshal(t *testing.T) {
 	}
 }
 
+//nolint:lll
 func TestPresignature_Marshal(t *testing.T) {
 
 	_, _, precomputations, err := generateKeyPairRandom(threshold, n, k)
@@ -143,6 +149,7 @@ func TestPresignature_Marshal(t *testing.T) {
 	}
 }
 
+//nolint:lll
 func TestPrecomputation_Marshal(t *testing.T) {
 
 	_, _, precomputations, err := generateKeyPairRandom(threshold, n, k)
@@ -164,6 +171,7 @@ func TestPrecomputation_Marshal(t *testing.T) {
 	}
 }
 
+// generateKeyPairRandom generates a random key pair and precomputations.
 func generateKeyPairRandom(t, n, k int) (*bbs.PublicKey, *bbs.PrivateKey, []*bbs.PerPartyPrecomputations, error) {
 	seed := make([]byte, 32)
 

@@ -6,6 +6,8 @@ import (
 	ml "github.com/IBM/mathlib"
 )
 
+// OLECorrelation defines a correlated paired that
+// helps in BBS+ Threshold precomputations generation.
 type OLECorrelation struct {
 	U *ml.Zr
 	V *ml.Zr

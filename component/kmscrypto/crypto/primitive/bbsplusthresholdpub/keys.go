@@ -32,11 +32,12 @@ type PublicKey struct {
 	PointG2 *ml.G2
 }
 
-// PrivateKey defines BLS Public Key.
+// PrivateKey defines BLS Private Key.
 type PrivateKey struct {
 	FR *ml.Zr
 }
 
+// PartyPrivateKey defines a BLS Private Key for a party signer.
 type PartyPrivateKey struct {
 	SKShare   *ml.Zr
 	publicKey *ml.G2

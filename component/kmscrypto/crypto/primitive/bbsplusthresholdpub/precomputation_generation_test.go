@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//nolint:lll
 func TestAllPrecomputationGeneration(t *testing.T) {
 	seed := make([]byte, 32)
 
@@ -55,6 +56,7 @@ func TestAllPrecomputationGeneration(t *testing.T) {
 		sk, aShares, eShares, sShares)
 }
 
+//nolint:lll
 func testPCFPCGOutputAeAsAsk(t *testing.T,
 	k int,
 	indices [][]int,
@@ -128,6 +130,7 @@ func testPCFPCGOutputAeAsAsk(t *testing.T,
 	}
 }
 
+//nolint:lll
 func testInterpolationForSk(t *testing.T, sk *ml.Zr, skShares []*ml.Zr, indices []int) {
 	interpolationResult := curve.NewZrFromInt(0)
 	for _, i := range indices {
@@ -141,6 +144,7 @@ func testInterpolationForSk(t *testing.T, sk *ml.Zr, skShares []*ml.Zr, indices 
 	}
 }
 
+//nolint:lll
 func testPerPartyPrecomputationsWithoutCoefficients(t *testing.T, k int, indices [][]int,
 	precomputations []*bbsplusthresholdpub.PerPartyPrecomputations, sk *ml.Zr,
 	aShares, eShares, sShares [][]*ml.Zr) {
@@ -159,6 +163,7 @@ func testPerPartyPrecomputationsWithoutCoefficients(t *testing.T, k int, indices
 		sk, aShares, eShares, sShares)
 }
 
+//nolint:lll
 func testPerPartyPrecomputationsWithCoefficients(
 	t *testing.T,
 	k int,
