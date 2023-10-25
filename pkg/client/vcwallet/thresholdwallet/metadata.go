@@ -20,6 +20,7 @@ type ThresholdWalletMetaData struct {
 	Subject *Document `json:"subject,omitempty"`
 }
 
+// newCollection creates a collection model to be added in verifiable credential wallet.
 func newCollection(id, name string) *ThresholdWalletCollection {
 	return &ThresholdWalletCollection{
 		Context: []string{"https://w3id.org/wallet/v1"},
@@ -29,6 +30,7 @@ func newCollection(id, name string) *ThresholdWalletCollection {
 	}
 }
 
+// credentialFromDocument parses the content of the document for a verifiable credential.
 func credentialFromDocument(document *Document) (*verifiable.Credential, error) {
 	if document == nil {
 		return nil, errors.New("nil pointer to document")
@@ -46,6 +48,7 @@ func credentialFromDocument(document *Document) (*verifiable.Credential, error) 
 	return vc, nil
 }
 
+// documentFromCredential creates a document from a verifiable credential.
 func documentFromCredential(vcByte []byte, collectionID string) (*Document, error) {
 	vc, err := verifiable.ParseCredential(vcByte, verifiable.WithCredDisableValidation())
 	if err != nil {
@@ -59,6 +62,7 @@ func documentFromCredential(vcByte []byte, collectionID string) (*Document, erro
 	}, nil
 }
 
+// newMetadata creates a Metadata model from a document to be stored in content wallet.
 func newMetadata(document *Document) (*ThresholdWalletMetaData, error) {
 	if document == nil {
 		return nil, errors.New("nil pointer to document")

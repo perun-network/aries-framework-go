@@ -81,7 +81,7 @@ func TestIssueThresholdCredential(t *testing.T) {
 		mockctxHolder := newMockProvider(t)
 		err := CreateProfile(sampleHolderID, mockctxHolder, wallet.WithPassphrase(samplePassPhrase))
 		require.NoError(t, err)
-		holder, err := NewHolder(sampleHolderID, k, mockctxHolder, wallet.WithUnlockByPassphrase(samplePassPhrase))
+		holder, err := NewHolder(sampleHolderID, mockctxHolder, wallet.WithUnlockByPassphrase(samplePassPhrase))
 		require.NoError(t, err)
 		require.NotNil(t, holder)
 
@@ -129,9 +129,9 @@ func TestIssueThresholdCredential(t *testing.T) {
 		require.NotNil(t, credentialDoc)
 
 		// Set credential's index
-		nextMsgIndex, err := thresholdbbsplusGenerator.NextMsgIndex()
+		nextMsgIndex, err := thresholdbbsplusGenerator.NextMsgIndex() // Get next Index from Generator.
 		require.NoError(t, err)
-		err = holder.SetNexMsgIndex(nextMsgIndex)
+		err = holder.SetNextMsgIndex(nextMsgIndex)
 		require.NoError(t, err)
 		signedCredentialDoc, err := holder.Sign(credentialDoc)
 		require.NoError(t, err)
@@ -141,6 +141,7 @@ func TestIssueThresholdCredential(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, signedCredential.Proofs)
 
+		// Holder verifies the signed credential.
 		verificationResult, err := holder.Verify(signedCredentialDoc, publicKeyDoc)
 		require.NoError(t, err)
 		require.True(t, verificationResult)

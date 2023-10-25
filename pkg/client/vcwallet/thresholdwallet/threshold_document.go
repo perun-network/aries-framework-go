@@ -39,7 +39,5 @@ func NewDocument(
 		Type:         contentType,
 		Content:      content,
 		CollectionID: collectionID,
-		Indices:      nil,
-		MsgIndex:     -1,
 	}
 }

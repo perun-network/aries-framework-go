@@ -18,18 +18,30 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+// Holders is a Wallet Client that want a credential to be signed
+// and request the signing with all party signers.
 type Holder struct {
 	userID        string
 	vcwallet      *vcwallet.Client
 	context       provider
 	collectionIDs []string
-	threshold     int
-	msgIndex      int
-	maxIndex      int
+	threshold     int // Theshold must be set based on precomputations generation.
+	msgIndex      int // msgIndex must be obtained from the precomputation generator.
 	partySigners  []*PartySigner
 }
 
-func NewHolder(userID string, k int, ctx provider, options ...wallet.UnlockOptions) (*Holder, error) {
+// NewHolder returns new holder client with verifiable credential wallet for given user.
+//
+//	Args:
+//		- userID : unique user identifier used for login.
+//		- provider: dependencies for the verifiable credential wallet client.
+//		- options : options for unlocking wallet. Any other existing wallet instance of same wallet user will be locked
+//		once this instance is unlocked.
+//
+// returns error if wallet profile is not found.
+// To create a new wallet profile, use `CreateProfile()`.
+// To update an existing profile, use `UpdateProfile()`.
+func NewHolder(userID string, ctx provider, options ...wallet.UnlockOptions) (*Holder, error) {
 	vcwallet, err := vcwallet.New(userID, ctx, options...)
 	if err != nil {
 		return nil, err
@@ -40,12 +52,17 @@ func NewHolder(userID string, k int, ctx provider, options ...wallet.UnlockOptio
 		context:       ctx,
 		collectionIDs: make([]string, 0),
 		threshold:     -1,
-		maxIndex:      k,
 		msgIndex:      0,
 		partySigners:  make([]*PartySigner, 0),
 	}, nil
 }
 
+// Open unlocks wallet client's key manager instance and returns a token for subsequent use of wallet features.
+//
+//	Args:
+//		- unlock options for opening wallet.
+//
+//	Returns error if unlock fails.
 func (c *Holder) Open(options ...wallet.UnlockOptions) error {
 	if err := c.vcwallet.Open(options...); err != nil {
 		return err
@@ -53,11 +70,21 @@ func (c *Holder) Open(options ...wallet.UnlockOptions) error {
 	return nil
 }
 
+// Close expires token issued to this VC wallet client.
+// returns false if token is not found or already expired for this wallet user.
 func (c *Holder) Close() error {
 	c.vcwallet.Close()
 	return nil
 }
 
+// Store adds the given document to wallet contents store.
+//
+// Supported document type:
+//   - Credential
+//   - Precomputation
+//   - PublicKey
+//
+// Returns error if failed.
 func (c *Holder) Store(document *Document) error {
 	// Check if the document's collection is already stored.
 	if !slices.Contains(c.collectionIDs, document.CollectionID) {
@@ -111,6 +138,8 @@ func (c *Holder) Store(document *Document) error {
 	return nil
 }
 
+// AddCollection adds a new collection to group documents given its collectionID.
+// Returns error if the collection already existed.
 func (c *Holder) AddCollection(collectionID string) error {
 	collection := newCollection(collectionID, c.userID)
 	collectionBytes, err := json.Marshal(collection)
@@ -125,6 +154,14 @@ func (c *Holder) AddCollection(collectionID string) error {
 	return nil
 }
 
+// Get retrieves the document from the wallet contents store. based on its ID and content Type.
+//
+// Supported document type:
+//   - Credential
+//   - Precomputation
+//   - PublicKey
+//
+// Returns error if the document is not found.
 func (c *Holder) Get(contentType ContentType, documentID string, collectionID string) (*Document, error) {
 	switch contentType {
 	case Credential:
@@ -158,6 +195,8 @@ func (c *Holder) Get(contentType ContentType, documentID string, collectionID st
 	}
 }
 
+// GetCollection retrieves all the documents from a collection.
+// Returns error if collection did not exist or retrieve documents failed.
 func (c *Holder) GetCollection(collectionID string) ([]*Document, error) {
 	var collection []*Document
 
@@ -192,6 +231,14 @@ func (c *Holder) GetCollection(collectionID string) ([]*Document, error) {
 	return collection, nil
 }
 
+// Remove deletes the document from wallet contents store given its type and ID.
+//
+// Supported document type:
+//   - Credential
+//   - Precomputation
+//   - PublicKey
+//
+// Returns error if remove failed.
 func (c *Holder) Remove(contentType ContentType, documentID string) error {
 	switch contentType {
 	case Credential:
@@ -211,15 +258,31 @@ func (c *Holder) Remove(contentType ContentType, documentID string) error {
 	}
 }
 
+// RemoveCollection removes a collection with all of its documents given collectionID.
+// Returns error if remove failed.
 func (c *Holder) RemoveCollection(collectionID string) error {
 	err := c.vcwallet.Remove(wallet.Collection, collectionID)
 	if err != nil {
 		return fmt.Errorf("remove collection from wallet: %w", err)
 	}
+
+	for i, v := range c.collectionIDs {
+		if v == collectionID {
+			// Remove the element by creating a new slice without it
+			c.collectionIDs = append(c.collectionIDs[:i], c.collectionIDs[i+1:]...)
+			break
+		}
+	}
 	return nil
 }
 
+// Sign adds proof to a Verifiable Credential.
+// The holder must first retrieve partial proofs from its party signers,
+// and combine the partial proofs to obtained true proof.
+//
+// Returns error if Sign failed.
 func (c *Holder) Sign(credential *Document) (*Document, error) {
+	// Get verifiable credential.
 	vc, err := verifiable.ParseCredential(credential.Content,
 		verifiable.WithJSONLDDocumentLoader(c.context.JSONLDDocumentLoader()),
 		verifiable.WithCredDisableValidation(),
@@ -227,19 +290,21 @@ func (c *Holder) Sign(credential *Document) (*Document, error) {
 	if err != nil {
 		return nil, err
 	}
-	created := time.Now()
-	indices := generateRandomIndices(c.threshold, len(c.partySigners))
+	created := time.Now()                                              // Time of issuance, sync for all party signers.
+	indices := generateRandomIndices(c.threshold, len(c.partySigners)) // Choose random signers.
+	// Obtains partial signatures.
 	partialSignatures := make([][]byte, c.threshold)
 	for i := 0; i < c.threshold; i++ {
 		partialCredential := NewDocument(Credential, credential.Content, credential.CollectionID)
-		partialCredential.Indices = indices
-		partialCredential.MsgIndex = c.msgIndex
-		partialCredential.Created = &created
+		partialCredential.Indices = indices     // Set indices for party signer.
+		partialCredential.MsgIndex = c.msgIndex // Set message Index for party signer.
+		partialCredential.Created = &created    // Set issuance time.
 		partialSignedCredential, err := c.partySigners[indices[i]-1].Sign(partialCredential)
 		if err != nil {
 			return nil, err
 		}
 
+		// Get the partial signed verifiable credential.
 		partialSignedVC, err := verifiable.ParseCredential(partialSignedCredential.Content,
 			verifiable.WithJSONLDDocumentLoader(c.context.JSONLDDocumentLoader()),
 			verifiable.WithCredDisableValidation(),
@@ -248,6 +313,8 @@ func (c *Holder) Sign(credential *Document) (*Document, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		// Get the partial signature from the partial signed verifiable credential.
 		partialSignature, err := validatePartialSignature(partialSignedVC.Proofs[0])
 		if err != nil {
 			return nil, err
@@ -256,6 +323,7 @@ func (c *Holder) Sign(credential *Document) (*Document, error) {
 		partialSignatures[i] = partialSignature
 	}
 
+	// Create Threshold BBS+ Signature Suite.
 	thresholdSigner := signer.NewThresholdBBSG2SignatureSigner(c.threshold, credential.MsgIndex, partialSignatures)
 	sigSuite := bbsblssignature2020.New(
 		suite.WithSigner(thresholdSigner),
@@ -282,6 +350,12 @@ func (c *Holder) Sign(credential *Document) (*Document, error) {
 	return credential, nil
 }
 
+// Verify checked the signed credential and used the given public key to verify its signature.
+// Supported:
+// - Bls12381G2Key2020
+//
+// Returns true if verification succeed and false if verification failed.
+// Returns error if parse credential failed.
 func (c *Holder) Verify(signedCredential *Document, publicKey *Document) (bool, error) {
 	_, err := verifiable.ParseCredential(signedCredential.Content,
 		verifiable.WithJSONLDDocumentLoader(c.context.JSONLDDocumentLoader()),
@@ -292,6 +366,8 @@ func (c *Holder) Verify(signedCredential *Document, publicKey *Document) (bool, 
 	return true, nil
 }
 
+// AddPartySigner adds a new party signer to be used in signing credentials.
+// Returns error on nil-pointer.
 func (c *Holder) AddPartySigner(ps *PartySigner) error {
 	if ps == nil {
 		return errors.New("nil pointer party signer")
@@ -303,6 +379,8 @@ func (c *Holder) AddPartySigner(ps *PartySigner) error {
 	return nil
 }
 
+// RemovePartySigner removes a party signer from signing future partial signatures.
+// Returns error if the given ID was not found.
 func (c *Holder) RemovePartySigner(psID string) error {
 	var newPartySigners []*PartySigner
 
@@ -320,6 +398,7 @@ func (c *Holder) RemovePartySigner(psID string) error {
 	return nil
 }
 
+// SetThreshold sets the threshold for signing next verifiable credential.
 func (c *Holder) SetThreshold(threshold int) error {
 	if len(c.partySigners) < threshold {
 		return errors.New("threshold out of bound")
@@ -328,14 +407,14 @@ func (c *Holder) SetThreshold(threshold int) error {
 	return nil
 }
 
-func (c *Holder) SetNexMsgIndex(nextMsgIndex int) error {
-	if nextMsgIndex >= c.maxIndex {
-		return errors.New("next message out of bound")
-	}
+// SetNextMsgIndex sets the index for signing next verifiable credential.
+func (c *Holder) SetNextMsgIndex(nextMsgIndex int) error {
 	c.msgIndex = nextMsgIndex
 	return nil
 }
 
+// generateRandomIndices create a random set of unique, unduplicated indices.
+// Returns an array of indices with size threshold and value range from 1 to numOfParties.
 func generateRandomIndices(threshold, numOfParties int) []int {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
