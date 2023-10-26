@@ -4,7 +4,7 @@ import "hash"
 
 type PrecomputationsGenerator interface {
 	// GeneratePrecomputation generate the precomputations for each party
-	// and returns the public key and precomputations for each party as a Document.
+	// and returns the collectionID, the public key and precomputations for each party as a Document.
 	GeneratePrecomputation(h func() hash.Hash, seed []byte, t, n, k int) (string, *Document, []*Document, error)
 
 	// NextMsgIndex returns the next to be used presignature index.

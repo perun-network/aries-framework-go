@@ -30,6 +30,7 @@ type Document struct {
 	Created      *time.Time
 }
 
+// NewDocument creates a corresponding document based on the given content and its type.
 func NewDocument(
 	contentType ContentType,
 	content []byte,

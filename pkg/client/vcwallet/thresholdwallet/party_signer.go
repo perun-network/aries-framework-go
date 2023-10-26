@@ -110,8 +110,11 @@ func (c *PartySigner) Open(options ...wallet.UnlockOptions) error {
 // Close expires token issued to this VC wallet client.
 // returns false if token is not found or already expired for this wallet user.
 func (c *PartySigner) Close() error {
-	c.vcwallet.Close()
-	return nil
+	result := c.vcwallet.Close()
+	if result {
+		return nil
+	}
+	return errors.New("close failed")
 }
 
 // Store adds the given document to wallet contents store.
@@ -238,7 +241,7 @@ func (c *PartySigner) GetCollection(collectionID string) ([]*Document, error) {
 	var collection []*Document
 
 	// Get all credentials from the collection.
-	credentials, err := c.vcwallet.GetAll(wallet.Credential, wallet.FilterByCollection(collectionID+collectionID))
+	credentials, err := c.vcwallet.GetAll(wallet.Credential, wallet.FilterByCollection(collectionID))
 	if err != nil {
 		return nil, fmt.Errorf("get credentials with collection id %s: %w", collectionID, err)
 	}
@@ -298,7 +301,18 @@ func (c *PartySigner) Remove(contentType ContentType, documentID string) error {
 // RemoveCollection removes a collection with all of its documents given collectionID.
 // Returns error if remove failed.
 func (c *PartySigner) RemoveCollection(collectionID string) error {
-	err := c.vcwallet.Remove(wallet.Collection, collectionID)
+	documents, err := c.GetCollection(collectionID)
+	if err != nil {
+		return err
+	}
+	for _, document := range documents {
+		err := c.Remove(document.Type, document.ID)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = c.vcwallet.Remove(wallet.Collection, collectionID)
 	if err != nil {
 		return fmt.Errorf("remove collection from wallet: %w", err)
 	}

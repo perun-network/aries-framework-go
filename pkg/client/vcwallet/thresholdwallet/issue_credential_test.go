@@ -30,7 +30,8 @@ const (
 	sampleHolderID = "sample-holder"
 	sampleSignerID = "sample-signer%d"
 
-	samplePassPhrase = "fakepassphrase"
+	samplePassPhrase    = "fakepassphrase"
+	sampleRemoteKMSAuth = "sample-auth-token"
 
 	threshold = 2 // threshold number t (-out of n)
 	n         = 3 // number of participating servers
