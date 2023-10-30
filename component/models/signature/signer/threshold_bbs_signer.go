@@ -79,7 +79,7 @@ func (tbps *ThresholdBBSG2SignaturePartySigner) Alg() string {
 //	partial signature in []byte
 //	error in case of errors
 func (tbps *ThresholdBBSG2SignaturePartySigner) Sign(data []byte) ([]byte, error) {
-	party_bbs := bbsplusthresholdpub.NewParty()
+	party_bbs := bbsplusthresholdpub.New()
 	if tbps.msgIndex >= len(tbps.presignatures) || tbps.msgIndex < 0 {
 		return nil, errors.New("out of presignatures")
 	}

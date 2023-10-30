@@ -128,7 +128,7 @@ func TestBBSPlusPub_SignWithPartialSignatures(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, partyPrivKeyBytes)
 
-		partyBBS := bbsplusthresholdpub.NewParty()
+		partyBBS := bbsplusthresholdpub.New()
 		partialSignatureBytes, err := partyBBS.SignWithPresignature(messagesBytes,
 			partyPrivKeyBytes,
 			indices,

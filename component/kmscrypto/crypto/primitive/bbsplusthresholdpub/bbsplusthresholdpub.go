@@ -47,6 +47,14 @@ var (
 	bbsplusThresholdPublicKeyLen = curve.CompressedG2ByteSize
 
 	// nolint:gochecknoglobals
+	// Partial signature length.
+	bbsplusPartialSignatureLen = curve.CompressedG1ByteSize + 3*frCompressedSize
+
+	// nolint:gochecknoglobals
+	// Partial signature length.
+	bbsplusThresholdLivePresignatureLen = curve.CompressedG1ByteSize + 3*frCompressedSize
+
+	// nolint:gochecknoglobals
 	// Number of bytes in G1 X coordinate.
 	g1CompressedSize = curve.CompressedG1ByteSize
 
@@ -276,6 +284,64 @@ func (bbs *BBSThresholdPub) SignWithPartialSignatures(partialSignaturesBytes [][
 		S: s,
 	}
 	return signature.ToBytes()
+}
+
+// SignWithPresignature produces a partial signature for messages using a Threshold BBS+ presignature.
+func (*BBSThresholdPub) SignWithPresignature(
+	messages [][]byte,
+	partyPrivKey []byte,
+	indices []int,
+	presignature *PerPartyPresignature) ([]byte, error) {
+
+	var err error
+	privKey, err := UnmarshalPartyPrivateKey(partyPrivKey)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal private key: %w", err)
+	}
+
+	pubKey := privKey.PublicKey()
+	messagesCount := len(messages)
+
+	if messagesCount == 0 {
+		return nil, errors.New("messages are not defined")
+	}
+
+	pubKeyWithGenerators, err := pubKey.ToPublicKeyWithGenerators(messagesCount)
+	if err != nil {
+		return nil, fmt.Errorf("build generators from public key: %w", err)
+	}
+
+	messagesFr := make([]*SignatureMessage, len(messages))
+	for i := range messages {
+		messagesFr[i] = ParseSignatureMessage(messages[i])
+	}
+
+	livePresignature := NewLivePresignature(privKey.Index+1, indices, presignature)
+	// message-dependent term
+	basis := curve.GenG1
+	basis = basis.Mul(curve.NewZrFromInt(1))
+
+	for i := 0; i < len(pubKeyWithGenerators.h); i++ {
+		tmp := pubKeyWithGenerators.h[i].Copy()
+		tmp = tmp.Mul(messagesFr[i].FR)
+		basis.Add(tmp)
+	}
+
+	// Share of A
+	capitalAShare := basis.Copy()
+	capitalAShare = capitalAShare.Mul(livePresignature.AShare)
+	tmp := pubKeyWithGenerators.h0.Copy()
+	tmp = tmp.Mul(livePresignature.AlphaShare)
+	capitalAShare.Add(tmp)
+
+	partialSignature := &PartialSignature{
+		CapitalAShare: capitalAShare,
+		DeltaShare:    livePresignature.DeltaShare,
+		EShare:        livePresignature.EShare,
+		SShare:        livePresignature.SShare,
+	}
+
+	return partialSignature.ToBytes()
 }
 
 func computeB(s *ml.Zr, messages []*SignatureMessage, key *PublicKeyWithGenerators) *ml.G1 {
