@@ -30,9 +30,13 @@ func (sv baseSignatureSigner) Algorithm() string {
 // Party signer signs a credential and produces a partial signature based on its pregenerated presignature.
 type ThresholdBBSG2SignaturePartySigner struct {
 	partyPrivKeyBytes []byte
-	indices           [][]int
-	presignatures     []*bbsplusthresholdpub.PerPartyPresignature
-	msgIndex          int // Index of the current message/presignature.
+
+	indices [][]int // Indices indicates participating parties and their order in threshold signing.
+	// Needed for creating partial signature. Determined by the Holder.
+	// 1.Dimension is the index of the presignatures to be used. 2.Dimension is the index of the participating party.
+
+	presignatures []*bbsplusthresholdpub.PerPartyPresignature
+	msgIndex      int // Index of the current message/presignature.
 	baseSignatureSigner
 }
 
