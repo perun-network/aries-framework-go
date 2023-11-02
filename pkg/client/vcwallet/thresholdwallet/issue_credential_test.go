@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/uuid"
+	"github.com/hyperledger/aries-framework-go/pkg/didcomm/common/service"
 	"github.com/hyperledger/aries-framework-go/pkg/didcomm/protocol/didexchange"
 	"github.com/hyperledger/aries-framework-go/pkg/didcomm/protocol/mediator"
 	"github.com/hyperledger/aries-framework-go/pkg/internal/ldtestutil"
@@ -80,30 +82,61 @@ func TestIssueThresholdCredential(t *testing.T) {
 	t.Run("test simple issue credential protocol between holder and partial signers", func(t *testing.T) {
 		// Init Holder's wallet.
 		mockctxHolder := newMockProvider(t)
+		sampleConnID := uuid.New().String()
+
+		didexSvcHolder := &mockdidexchange.MockDIDExchangeSvc{
+			RegisterMsgEventHandle: func(ch chan<- service.StateMsg) error {
+				ch <- service.StateMsg{
+					Type:       service.PostState,
+					StateID:    didexchange.StateIDCompleted,
+					Properties: &mockdidexchange.MockEventProperties{ConnID: sampleConnID},
+				}
+
+				return nil
+			},
+		}
+		mockctxHolder.ServiceMap[didexchange.DIDExchange] = didexSvcHolder
+
 		err := CreateProfile(sampleHolderID, mockctxHolder, wallet.WithPassphrase(samplePassPhrase))
 		require.NoError(t, err)
 		holder, err := NewHolder(sampleHolderID, mockctxHolder, wallet.WithUnlockByPassphrase(samplePassPhrase))
 		require.NoError(t, err)
 		require.NotNil(t, holder)
 
+		invitationIDs := make([]string, 0)
+
 		// Init Party Signers' wallets.
 		signers := make([]*PartySigner, n)
 		for i := 0; i < n; i++ {
 			mockctxSigner := newMockProvider(t)
+			didexSvcSigner := &mockdidexchange.MockDIDExchangeSvc{
+				RegisterMsgEventHandle: func(ch chan<- service.StateMsg) error {
+					ch <- service.StateMsg{
+						Type:       service.PostState,
+						StateID:    didexchange.StateIDCompleted,
+						Properties: &mockdidexchange.MockEventProperties{ConnID: sampleConnID},
+					}
+
+					return nil
+				},
+			}
+			mockctxHolder.ServiceMap[didexchange.DIDExchange] = didexSvcSigner
 			err = CreateProfile(fmt.Sprintf(sampleSignerID, i), mockctxSigner, wallet.WithPassphrase(samplePassPhrase))
 			require.NoError(t, err)
 			signers[i], err = NewPartySigner(fmt.Sprintf(sampleSignerID, i), mockctxSigner, wallet.WithUnlockByPassphrase(samplePassPhrase))
 			require.NoError(t, err)
 			require.NotNil(t, signers[i])
 
-			// holder adds contacts of signers.
-			err = holder.AddPartySigner(signers[i])
+			invitation, err := signers[i].Invite(holder.userID)
 			require.NoError(t, err)
-		}
+			require.NotNil(t, invitation)
 
-		// Set threshold after all signers have been added.
-		err = holder.SetThreshold(threshold)
-		require.NoError(t, err)
+			holderConnectionID, err := holder.Connect(invitation)
+			require.NoError(t, err)
+			require.NotNil(t, holderConnectionID)
+
+			invitationIDs = append(invitationIDs, invitation.ID)
+		}
 
 		// Init Precomputation's generator.
 		thresholdbbsplusGenerator := NewThresholdBBSPlusGenerator()
@@ -124,6 +157,17 @@ func TestIssueThresholdCredential(t *testing.T) {
 			require.NoError(t, err)
 		}
 
+		for _, inviationID := range invitationIDs {
+			connection, err := holder.GetConnection(inviationID)
+			require.NoError(t, err)
+			require.NotNil(t, connection)
+			holder.AddPartySigner(collectionID, connection)
+		}
+
+		// Set threshold after all signers have been added.
+		err = holder.SetThreshold(collectionID, threshold)
+		require.NoError(t, err)
+
 		// Generate credential Document
 		credentialDoc, err := documentFromCredential([]byte(vcJSON), collectionID)
 		require.NoError(t, err)
@@ -132,7 +176,7 @@ func TestIssueThresholdCredential(t *testing.T) {
 		// Set credential's index
 		nextMsgIndex, err := thresholdbbsplusGenerator.NextMsgIndex() // Get next Index from Generator.
 		require.NoError(t, err)
-		err = holder.SetNextMsgIndex(nextMsgIndex)
+		err = holder.SetNextMsgIndex(collectionID, nextMsgIndex)
 		require.NoError(t, err)
 		signedCredentialDoc, err := holder.Sign(credentialDoc)
 		require.NoError(t, err)
