@@ -155,6 +155,11 @@ func (c *PartySigner) handle() error {
 	return nil
 }
 
+// handleDIDExchange creates a channel to capture didexchange message and responses accordingly.
+// Incoming Invitation: accepts, generates invitee's did and sends back request.
+// Incoming Request: accepts, generates inviter's did, saves connection and sends back response.
+// Incoming Response: accepts, save connection, ends protocol.
+// Incoming Error Report: accepts report, ends protocol.
 func (c *PartySigner) handleDidExchange() error {
 	// Setup actions channels.
 	actionsDidExchange := make(chan service.DIDCommAction)
@@ -168,6 +173,10 @@ func (c *PartySigner) handleDidExchange() error {
 	return nil
 }
 
+// HandleIssueCredential handles other's issuecredential messages.
+// Incoming proposal: accepts and sends back offer,
+// Incoming request: accepts and sends back credential.
+// Incoming unknown message: returns error.
 func (c *PartySigner) handleIssueCredential() error {
 	actionsIssueCredential := make(chan service.DIDCommAction)
 	err := c.issuecredential.RegisterActionEvent(actionsIssueCredential)
@@ -531,6 +540,7 @@ func (c *PartySigner) GetConnection(invitation *didexchange.Invitation) (*didexc
 	return connections[0], nil
 }
 
+// replayProposal responses to a credential proposal with a corresponding offer.
 func (c *PartySigner) replayProposal(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error) {
 	proposal := &issuecredential.ProposeCredentialV2{}
 
@@ -563,6 +573,7 @@ func (c *PartySigner) replayProposal(msg service.DIDCommMsg) (interface{}, *rfc0
 	}), payload.Options, nil
 }
 
+// issueCredential responses to a request message by creates a issue credential message.
 func (c *PartySigner) issueCredential(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error) {
 	request := &issuecredential.RequestCredentialV2{}
 
@@ -586,6 +597,7 @@ func (c *PartySigner) issueCredential(msg service.DIDCommMsg) (interface{}, *rfc
 	return credential.WithIssueCredentialV2(ic), payload.Options, nil
 }
 
+// createIssueCredentialMsg signs the credential and creates a corresponding message for holder.
 func (c *PartySigner) createIssueCredentialMsg(spec *rfc0593.CredentialSpec) (*credential.IssueCredentialV2, error) {
 	vc, err := verifiable.ParseCredential(
 		spec.Template,
@@ -625,6 +637,7 @@ func (c *PartySigner) createIssueCredentialMsg(spec *rfc0593.CredentialSpec) (*c
 	}, nil
 }
 
+// ldProofContext creates a JSONLD-Proof Context for signing partial signature.
 func (c *PartySigner) ldProofContext(spec *rfc0593.CredentialSpec) (*verifiable.LinkedDataProofContext, error) {
 	var indices []int
 	err := json.Unmarshal([]byte(spec.Options.Challenge), &indices)
@@ -665,6 +678,7 @@ func (c *PartySigner) ldProofContext(spec *rfc0593.CredentialSpec) (*verifiable.
 	return ldpContext, nil
 }
 
+// setSigner sets a signer to be used with precomputation from collectionID.
 func (c *PartySigner) setSigner(collectionID string) error {
 	// Get precomputation with the same collectionID as the credential.
 	collection, err := c.GetCollection(collectionID)

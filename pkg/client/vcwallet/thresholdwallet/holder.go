@@ -35,10 +35,10 @@ type Holder struct {
 	vcwallet          *vcwallet.Client
 	context           provider
 	collectionIDs     []string
-	threshold         map[string]int // Theshold must be set based on precomputations generation.
-	msgIndex          map[string]int // msgIndex must be obtained from the precomputation generator.
-	partySigners      map[string][]*didexchange.Connection
-	partialSignatures map[string][][]byte
+	threshold         map[string]int                       // Theshold must be set based on precomputations generation, each collectionID has its own threshold.
+	msgIndex          map[string]int                       // msgIndex must be obtained from the precomputation generator, each collectionID has its own.
+	partySigners      map[string][]*didexchange.Connection // each collectionID will have an array of collection to its threshold signers.
+	partialSignatures map[string][][]byte                  // An array of partial signatures for each collectionID.
 }
 
 // NewHolder returns new holder client with verifiable credential wallet for given user.
@@ -117,6 +117,11 @@ func (c *Holder) handle() error {
 	return nil
 }
 
+// handleDIDExchange creates a channel to capture didexchange message and responses accordingly.
+// Incoming Invitation: accepts, generates invitee's did and sends back request.
+// Incoming Request: accepts, generates inviter's did, saves connection and sends back response.
+// Incoming Response: accepts, save connection, ends protocol.
+// Incoming Error Report: accepts report, ends protocol.
 func (c *Holder) handleDidExchange() error {
 	// Setup actions channels.
 	actionsDidExchange := make(chan service.DIDCommAction)
@@ -130,6 +135,10 @@ func (c *Holder) handleDidExchange() error {
 	return nil
 }
 
+// HandleIssueCredential handles other's issuecredential messages.
+// Incoming offer: accepts and sends back request.
+// Incoming credential: accepts, extracts partial signatures.
+// Incoming unknown message: returns error.
 func (c *Holder) handleIssueCredential() error {
 	actionsIssueCredential := make(chan service.DIDCommAction)
 	err := c.issuecredential.RegisterActionEvent(actionsIssueCredential)
@@ -434,32 +443,8 @@ func (c *Holder) Sign(credential *Document) (*Document, error) {
 
 		c.ProposeCredential(c.partySigners[credential.CollectionID][indices[i]-1], partialCredential)
 		log.Printf("Holder proposed credential to signer %d", indices[i]-1)
-		/*
-			partialSignedCredential, err := c.partySigners[indices[i]-1].Sign(partialCredential)
-			if err != nil {
-				return nil, err
-			}
-
-			// Get the partial signed verifiable credential.
-			partialSignedVC, err := verifiable.ParseCredential(partialSignedCredential.Content,
-				verifiable.WithJSONLDDocumentLoader(c.context.JSONLDDocumentLoader()),
-				verifiable.WithCredDisableValidation(),
-				verifiable.WithDisabledProofCheck(),
-			)
-			if err != nil {
-				return nil, err
-			}
-
-			// Get the partial signature from the partial signed verifiable credential.
-			partialSignature, err := validatePartialSignature(partialSignedVC.Proofs[0])
-			if err != nil {
-				return nil, err
-			}
-
-			partialSignatures[i] = partialSignature
-		*/
 	}
-	time.Sleep(signingDelay)
+	time.Sleep(signingDelay) // Wait for all parties to sign the credential.
 	// Create Threshold BBS+ Signature Suite.
 	thresholdSigner := signer.NewThresholdBBSG2SignatureSigner(c.threshold[credential.CollectionID], credential.MsgIndex, c.partialSignatures[credential.CollectionID])
 	sigSuite := bbsblssignature2020.New(
@@ -736,6 +721,7 @@ func fetchPartialCredential(p provider, name string, msg service.DIDCommMsg) (in
 	return credential.WithFriendlyNames(name), partialSignature, nil
 }
 
+// replayOffers responses to an issuecredential offer with a corresponding request.
 func (c *Holder) replayOffer(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error) {
 	offer := &credential.OfferCredentialV2{}
 
