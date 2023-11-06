@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +17,7 @@ import (
 	"github.com/hyperledger/aries-framework-go/pkg/client/issuecredential/rfc0593"
 	"github.com/hyperledger/aries-framework-go/pkg/client/vcwallet"
 	"github.com/hyperledger/aries-framework-go/pkg/didcomm/common/service"
+	"github.com/hyperledger/aries-framework-go/pkg/didcomm/protocol/decorator"
 	credential "github.com/hyperledger/aries-framework-go/pkg/didcomm/protocol/issuecredential"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/suite"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/suite/bbsblssignature2020"
@@ -38,7 +39,6 @@ type Holder struct {
 	msgIndex          map[string]int // msgIndex must be obtained from the precomputation generator.
 	partySigners      map[string][]*didexchange.Connection
 	partialSignatures map[string][][]byte
-	signMutexes       map[string]*sync.Mutex
 }
 
 // NewHolder returns new holder client with verifiable credential wallet for given user.
@@ -67,18 +67,23 @@ func NewHolder(userID string, ctx provider, options ...wallet.UnlockOptions) (*H
 	if err != nil {
 		return nil, err
 	}
-	return &Holder{
-		userID:          userID,
-		vcwallet:        vcwallet,
-		didexchange:     didexchangeSvc,
-		issuecredential: issuecredentialSvc,
-		context:         ctx,
-		collectionIDs:   make([]string, 0),
-		threshold:       make(map[string]int),
-		msgIndex:        make(map[string]int),
-		partySigners:    make(map[string][]*didexchange.Connection),
-		signMutexes:     make(map[string]*sync.Mutex),
-	}, nil
+	holder := &Holder{
+		userID:            userID,
+		vcwallet:          vcwallet,
+		didexchange:       didexchangeSvc,
+		issuecredential:   issuecredentialSvc,
+		context:           ctx,
+		collectionIDs:     make([]string, 0),
+		threshold:         make(map[string]int),
+		msgIndex:          make(map[string]int),
+		partySigners:      make(map[string][]*didexchange.Connection),
+		partialSignatures: make(map[string][][]byte),
+	}
+	err = holder.handle()
+	if err != nil {
+		return nil, err
+	}
+	return holder, nil
 }
 
 // Open unlocks wallet client's key manager instance and returns a token for subsequent use of wallet features.
@@ -146,12 +151,14 @@ func (c *Holder) handleIssueCredential() error {
 				options *rfc0593.CredentialSpecOptions
 				err     error
 			)
-
-			switch event.Message.Type() {
+			messType := event.Message.Type()
+			switch messType {
 			case credential.OfferCredentialMsgTypeV2:
-				arg, options, err = rfc0593.ReplayOffer(c.context, event.Message)
+				log.Println("Received offer")
+				arg, options, err = c.replayOffer(event.Message)
 				err = saveOptionsIfNoError(err, db, event.Message, options)
 			case credential.IssueCredentialMsgTypeV2:
+				log.Println("Received credential")
 				options, err = fetchCredentialSpecOptions(db, event.Message)
 				if err != nil {
 					err = fmt.Errorf("failed to fetch credential spec options to validate credential: %w", err)
@@ -160,16 +167,9 @@ func (c *Holder) handleIssueCredential() error {
 
 				var partialSignature []byte
 				arg, partialSignature, err = fetchPartialCredential(c.context, uuid.New().String(), event.Message)
-				if err != nil {
+				if err == nil {
 					collectionID := options.Status.Type
-					mutex, ok := c.signMutexes[collectionID]
-					if !ok {
-						mutex = &sync.Mutex{}
-						c.signMutexes[collectionID] = mutex
-					}
-					mutex.Lock()
 					c.partialSignatures[collectionID] = append(c.partialSignatures[collectionID], partialSignature)
-					mutex.Unlock()
 				}
 			default:
 				event.Stop(fmt.Errorf("rfc0593: unsupported issue credential messages"))
@@ -420,45 +420,20 @@ func (c *Holder) Sign(credential *Document) (*Document, error) {
 	if err != nil {
 		return nil, err
 	}
-	created := time.Now()                                                                       // Time of issuance, sync for all party signers.
-	indices := generateRandomIndices(c.threshold[credential.CollectionID], len(c.partySigners)) // Choose random signers.
+	created := time.Now()                                                                                                // Time of issuance, sync for all party signers.
+	indices := generateRandomIndices(c.threshold[credential.CollectionID], len(c.partySigners[credential.CollectionID])) // Choose random signers.
 	// Obtains partial signatures.
 	c.partialSignatures[credential.CollectionID] = make([][]byte, 0)
 
-	// Init Mutex for adding partial signatures
-	mutex, ok := c.signMutexes[credential.CollectionID]
-	if !ok {
-		mutex = &sync.Mutex{}
-		c.signMutexes[credential.CollectionID] = mutex
-	}
-
-	// Create a channel to signal that the threshold has been reached
-	thresholdReached := make(chan struct{})
-
-	// Create a channel to signal that the timeout has occurred
-	timeout := time.After(signingDelay)
-
-	go func() {
-		for {
-			c.signMutexes[credential.CollectionID].Lock()
-			length := len(c.partialSignatures[credential.CollectionID])
-
-			c.signMutexes[credential.CollectionID].Unlock()
-
-			if length >= c.threshold[credential.CollectionID] {
-				close(thresholdReached)
-			}
-		}
-	}()
-
 	for i := 0; i < c.threshold[credential.CollectionID]; i++ {
+		// Create a channel to signal that the timeout has occurred
 		partialCredential := NewDocument(Credential, credential.Content, credential.CollectionID)
 		partialCredential.Indices = indices                              // Set indices for party signer.
 		partialCredential.MsgIndex = c.msgIndex[credential.CollectionID] // Set message Index for party signer.
 		partialCredential.Created = &created                             // Set issuance time.
 
 		c.ProposeCredential(c.partySigners[credential.CollectionID][indices[i]-1], partialCredential)
-
+		log.Printf("Holder proposed credential to signer %d", indices[i]-1)
 		/*
 			partialSignedCredential, err := c.partySigners[indices[i]-1].Sign(partialCredential)
 			if err != nil {
@@ -484,38 +459,37 @@ func (c *Holder) Sign(credential *Document) (*Document, error) {
 			partialSignatures[i] = partialSignature
 		*/
 	}
+	time.Sleep(signingDelay)
+	// Create Threshold BBS+ Signature Suite.
+	thresholdSigner := signer.NewThresholdBBSG2SignatureSigner(c.threshold[credential.CollectionID], credential.MsgIndex, c.partialSignatures[credential.CollectionID])
+	sigSuite := bbsblssignature2020.New(
+		suite.WithSigner(thresholdSigner),
+		suite.WithVerifier(bbsblssignature2020.NewG2PublicKeyVerifier()))
 
-	select {
-	case <-thresholdReached:
-		// Create Threshold BBS+ Signature Suite.
-		thresholdSigner := signer.NewThresholdBBSG2SignatureSigner(c.threshold[credential.CollectionID], credential.MsgIndex, c.partialSignatures[credential.CollectionID])
-		sigSuite := bbsblssignature2020.New(
-			suite.WithSigner(thresholdSigner),
-			suite.WithVerifier(bbsblssignature2020.NewG2PublicKeyVerifier()))
-
-		ldpContext := &verifiable.LinkedDataProofContext{
-			SignatureType:           "BbsBlsSignature2020",
-			SignatureRepresentation: verifiable.SignatureProofValue,
-			Suite:                   sigSuite,
-			VerificationMethod:      "did:bbspublickey#key",
-			Created:                 &created,
-		}
-
-		err = vc.AddLinkedDataProof(ldpContext, jsonld.WithDocumentLoader(c.context.JSONLDDocumentLoader()))
-		if err != nil {
-			return nil, err
-		}
-
-		vcSignedBytes, err := json.Marshal(vc)
-		if err != nil {
-			return nil, err
-		}
-		credential.Content = vcSignedBytes
-		return credential, nil
-
-	case <-timeout:
-		return nil, fmt.Errorf("obtained partial signatures timeout")
+	createdFormated, err := time.Parse(time.RFC3339, created.Format(time.RFC3339))
+	if err != nil {
+		return nil, err
 	}
+	ldpContext := &verifiable.LinkedDataProofContext{
+		SignatureType:           "BbsBlsSignature2020",
+		SignatureRepresentation: verifiable.SignatureProofValue,
+		Suite:                   sigSuite,
+		VerificationMethod:      "did:bbspublickey#key",
+		Created:                 &createdFormated,
+	}
+
+	err = vc.AddLinkedDataProof(ldpContext, jsonld.WithDocumentLoader(c.context.JSONLDDocumentLoader()))
+	if err != nil {
+		return nil, err
+	}
+
+	vcSignedBytes, err := json.Marshal(vc)
+	if err != nil {
+		return nil, err
+	}
+	credential.Content = vcSignedBytes
+	return credential, nil
+
 }
 
 // Verify checked the signed credential and used the given public key to verify its signature.
@@ -549,6 +523,7 @@ func (c *Holder) Connect(invitation *didexchange.Invitation) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("connect didexchange invitation: %w", err)
 	}
+	time.Sleep(5 * time.Second)
 	return connectionID, nil
 }
 
@@ -654,7 +629,7 @@ func (c *Holder) SetThreshold(collectionID string, threshold int) error {
 		return errors.New("collectionID not found")
 	}
 
-	if len(c.partySigners) < threshold {
+	if len(c.partySigners[collectionID]) < threshold {
 		return errors.New("threshold out of bound")
 	}
 	c.threshold[collectionID] = threshold
@@ -674,6 +649,9 @@ func (c *Holder) SetNextMsgIndex(collectionID string, nextMsgIndex int) error {
 // generateRandomIndices create a random set of unique, unduplicated indices.
 // Returns an array of indices with size threshold and value range from 1 to numOfParties.
 func generateRandomIndices(threshold, numOfParties int) []int {
+	if numOfParties < threshold {
+		panic("threshold must be <= num of parties")
+	}
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	used := make(map[int]bool)
@@ -756,4 +734,64 @@ func fetchPartialCredential(p provider, name string, msg service.DIDCommMsg) (in
 	}
 
 	return credential.WithFriendlyNames(name), partialSignature, nil
+}
+
+func (c *Holder) replayOffer(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error) {
+	offer := &credential.OfferCredentialV2{}
+
+	err := msg.Decode(offer)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to decode msg type %s: %w", msg.Type(), err)
+	}
+
+	payload, err := c.getCredentialSpec(offer.Formats, offer.OffersAttach)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to extract payoad for msg type %s: %w", msg.Type(), err)
+	}
+
+	attachID := uuid.New().String()
+
+	return credential.WithRequestCredentialV2(&credential.RequestCredentialV2{
+		Type:    credential.RequestCredentialMsgTypeV2,
+		Comment: fmt.Sprintf("response to msg id: %s", msg.ID()),
+		Formats: []credential.Format{{
+			AttachID: attachID,
+			Format:   rfc0593.ProofVCDetailFormat,
+		}},
+		RequestsAttach: []decorator.Attachment{{
+			ID:       attachID,
+			MimeType: "application/json",
+			Data: decorator.AttachmentData{
+				JSON: payload,
+			},
+		}},
+	}), payload.Options, nil
+}
+
+// GetCredentialSpec extracts the CredentialSpec from the formats and attachments.
+func (c *Holder) getCredentialSpec(
+	formats []credential.Format, attachments []decorator.Attachment) (*rfc0593.CredentialSpec, error) {
+	attachment, err := rfc0593.FindAttachment(rfc0593.ProofVCDetailFormat, formats, attachments)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find attachment of type %s: %w", rfc0593.ProofVCDetailFormat, err)
+	}
+
+	payload := &rfc0593.CredentialSpec{}
+
+	err = unmarshalAttachmentContents(attachment, payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal attachment contents: %w", err)
+	}
+
+	_, err = verifiable.ParseCredential(
+		payload.Template,
+		verifiable.WithCredDisableValidation(),
+		verifiable.WithDisabledProofCheck(), // no proof is expected in this credential
+		verifiable.WithJSONLDDocumentLoader(c.context.JSONLDDocumentLoader()),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("bad request: unable to parse vc: %w", err)
+	}
+
+	return payload, nil
 }

@@ -19,7 +19,7 @@ import (
 const (
 	StoreName = "RFC0593TransientStore"
 
-	signingDelay = 5 * time.Second
+	signingDelay = 10 * time.Second
 )
 
 type Wallet interface {

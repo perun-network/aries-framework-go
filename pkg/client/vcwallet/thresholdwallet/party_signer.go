@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -88,14 +89,19 @@ func NewPartySigner(userID string, ctx provider, options ...wallet.UnlockOptions
 	if err != nil {
 		return nil, err
 	}
-	return &PartySigner{
+	partysigner := &PartySigner{
 		userID:          userID,
 		didexchange:     didexchange,
 		issuecredential: issuecredential,
 		vcwallet:        vcwallet,
 		context:         ctx,
 		collectionIDs:   make([]string, 0),
-	}, nil
+	}
+	err = partysigner.handle()
+	if err != nil {
+		return nil, err
+	}
+	return partysigner, nil
 }
 
 // CreateProfile creates a new verifiable credential wallet profile for given user.
@@ -185,9 +191,11 @@ func (c *PartySigner) handleIssueCredential() error {
 
 			switch event.Message.Type() {
 			case credential.ProposeCredentialMsgTypeV2:
-				arg, options, err = rfc0593.ReplayProposal(c.context, event.Message)
+				log.Println("Received proposal")
+				arg, options, err = c.replayProposal(event.Message)
 				err = saveOptionsIfNoError(err, db, event.Message, options)
 			case credential.RequestCredentialMsgTypeV2:
+				log.Println("Received request")
 				arg, options, err = c.issueCredential(event.Message)
 				err = saveOptionsIfNoError(err, db, event.Message, options)
 			default:
@@ -523,6 +531,38 @@ func (c *PartySigner) GetConnection(invitation *didexchange.Invitation) (*didexc
 	return connections[0], nil
 }
 
+func (c *PartySigner) replayProposal(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error) {
+	proposal := &issuecredential.ProposeCredentialV2{}
+
+	err := msg.Decode(proposal)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to decode msg type %s: %w", msg.Type(), err)
+	}
+
+	payload, err := c.getCredentialSpec(proposal.Formats, proposal.FiltersAttach)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to extract payload for msg type %s: %w", msg.Type(), err)
+	}
+
+	attachID := uuid.New().String()
+
+	return credential.WithOfferCredentialV2(&credential.OfferCredentialV2{
+		Type:    credential.OfferCredentialMsgTypeV2,
+		Comment: fmt.Sprintf("response to msg id: %s", msg.ID()),
+		Formats: []credential.Format{{
+			AttachID: attachID,
+			Format:   rfc0593.ProofVCDetailFormat,
+		}},
+		OffersAttach: []decorator.Attachment{{
+			ID:       attachID,
+			MimeType: "application/json",
+			Data: decorator.AttachmentData{
+				JSON: payload,
+			},
+		}},
+	}), payload.Options, nil
+}
+
 func (c *PartySigner) issueCredential(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error) {
 	request := &issuecredential.RequestCredentialV2{}
 
@@ -531,7 +571,7 @@ func (c *PartySigner) issueCredential(msg service.DIDCommMsg) (interface{}, *rfc
 		return nil, nil, fmt.Errorf("failed to decode msg type %s: %w", msg.Type(), err)
 	}
 
-	payload, err := rfc0593.GetCredentialSpec(c.context, request.Formats, request.RequestsAttach)
+	payload, err := c.getCredentialSpec(request.Formats, request.RequestsAttach)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get payload for msg type %s: %w", msg.Type(), err)
 	}
@@ -549,6 +589,7 @@ func (c *PartySigner) issueCredential(msg service.DIDCommMsg) (interface{}, *rfc
 func (c *PartySigner) createIssueCredentialMsg(spec *rfc0593.CredentialSpec) (*credential.IssueCredentialV2, error) {
 	vc, err := verifiable.ParseCredential(
 		spec.Template,
+		verifiable.WithCredDisableValidation(),
 		verifiable.WithDisabledProofCheck(), // no proof is expected in this credential
 		verifiable.WithJSONLDDocumentLoader(c.context.JSONLDDocumentLoader()),
 	)
@@ -647,4 +688,41 @@ func (c *PartySigner) setSigner(collectionID string) error {
 	}
 	c.signer = partySigner
 	return nil
+}
+
+// GetCredentialSpec extracts the CredentialSpec from the formats and attachments.
+func (c *PartySigner) getCredentialSpec(
+	formats []credential.Format, attachments []decorator.Attachment) (*rfc0593.CredentialSpec, error) {
+	attachment, err := rfc0593.FindAttachment(rfc0593.ProofVCDetailFormat, formats, attachments)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find attachment of type %s: %w", rfc0593.ProofVCDetailFormat, err)
+	}
+
+	payload := &rfc0593.CredentialSpec{}
+
+	err = unmarshalAttachmentContents(attachment, payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal attachment contents: %w", err)
+	}
+
+	_, err = verifiable.ParseCredential(
+		payload.Template,
+		verifiable.WithCredDisableValidation(),
+		verifiable.WithDisabledProofCheck(), // no proof is expected in this credential
+		verifiable.WithJSONLDDocumentLoader(c.context.JSONLDDocumentLoader()),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("bad request: unable to parse vc: %w", err)
+	}
+
+	return payload, nil
+}
+
+func unmarshalAttachmentContents(a *decorator.Attachment, v interface{}) error {
+	contents, err := a.Data.Fetch()
+	if err != nil {
+		return fmt.Errorf("failed to fetch attachment contents: %w", err)
+	}
+
+	return json.Unmarshal(contents, v)
 }
