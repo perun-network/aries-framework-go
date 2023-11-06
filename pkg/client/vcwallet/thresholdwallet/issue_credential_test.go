@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/google/uuid"
-	"github.com/hyperledger/aries-framework-go/pkg/didcomm/common/service"
 	"github.com/hyperledger/aries-framework-go/pkg/didcomm/protocol/didexchange"
 	"github.com/hyperledger/aries-framework-go/pkg/didcomm/protocol/mediator"
+	"github.com/hyperledger/aries-framework-go/pkg/didcomm/transport/http"
+	"github.com/hyperledger/aries-framework-go/pkg/framework/aries"
 	"github.com/hyperledger/aries-framework-go/pkg/internal/ldtestutil"
 	"github.com/hyperledger/aries-framework-go/pkg/wallet"
 	"github.com/stretchr/testify/require"
@@ -32,11 +32,15 @@ const (
 	sampleHolderID = "sample-holder"
 	sampleSignerID = "sample-signer%d"
 
+	externalPrefix = "http://"
+	endpointHolder = "localhost:26609"
+	endpointSigner = "localhost:2660%d"
+
 	samplePassPhrase    = "fakepassphrase"
 	sampleRemoteKMSAuth = "sample-auth-token"
 
-	threshold = 2 // threshold number t (-out of n)
-	n         = 3 // number of participating servers
+	threshold = 3 // threshold number t (-out of n)
+	n         = 5 // number of participating servers
 	k         = 1 // number of generated precomputations
 
 )
@@ -81,62 +85,22 @@ func TestIssueThresholdCredential(t *testing.T) {
 	`
 	t.Run("test simple issue credential protocol between holder and partial signers", func(t *testing.T) {
 		// Init Holder's wallet.
-		mockctxHolder := newMockProvider(t)
-		sampleConnID := uuid.New().String()
+		inboundHolder, err := http.NewInbound(endpointHolder, externalPrefix+endpointHolder, "", "")
+		require.NoError(t, err)
 
-		didexSvcHolder := &mockdidexchange.MockDIDExchangeSvc{
-			RegisterMsgEventHandle: func(ch chan<- service.StateMsg) error {
-				ch <- service.StateMsg{
-					Type:       service.PostState,
-					StateID:    didexchange.StateIDCompleted,
-					Properties: &mockdidexchange.MockEventProperties{ConnID: sampleConnID},
-				}
+		documentLoader, err := ldtestutil.DocumentLoader()
+		require.NoError(t, err)
+		holderAries, err := aries.New(aries.WithInboundTransport(inboundHolder), aries.WithJSONLDDocumentLoader(documentLoader))
+		require.NoError(t, err)
 
-				return nil
-			},
-		}
-		mockctxHolder.ServiceMap[didexchange.DIDExchange] = didexSvcHolder
+		mockctxHolder, err := holderAries.Context()
+		require.NoError(t, err)
 
-		err := CreateProfile(sampleHolderID, mockctxHolder, wallet.WithPassphrase(samplePassPhrase))
+		err = CreateProfile(sampleHolderID, mockctxHolder, wallet.WithPassphrase(samplePassPhrase))
 		require.NoError(t, err)
 		holder, err := NewHolder(sampleHolderID, mockctxHolder, wallet.WithUnlockByPassphrase(samplePassPhrase))
 		require.NoError(t, err)
 		require.NotNil(t, holder)
-
-		invitationIDs := make([]string, 0)
-
-		// Init Party Signers' wallets.
-		signers := make([]*PartySigner, n)
-		for i := 0; i < n; i++ {
-			mockctxSigner := newMockProvider(t)
-			didexSvcSigner := &mockdidexchange.MockDIDExchangeSvc{
-				RegisterMsgEventHandle: func(ch chan<- service.StateMsg) error {
-					ch <- service.StateMsg{
-						Type:       service.PostState,
-						StateID:    didexchange.StateIDCompleted,
-						Properties: &mockdidexchange.MockEventProperties{ConnID: sampleConnID},
-					}
-
-					return nil
-				},
-			}
-			mockctxHolder.ServiceMap[didexchange.DIDExchange] = didexSvcSigner
-			err = CreateProfile(fmt.Sprintf(sampleSignerID, i), mockctxSigner, wallet.WithPassphrase(samplePassPhrase))
-			require.NoError(t, err)
-			signers[i], err = NewPartySigner(fmt.Sprintf(sampleSignerID, i), mockctxSigner, wallet.WithUnlockByPassphrase(samplePassPhrase))
-			require.NoError(t, err)
-			require.NotNil(t, signers[i])
-
-			invitation, err := signers[i].Invite(holder.userID)
-			require.NoError(t, err)
-			require.NotNil(t, invitation)
-
-			holderConnectionID, err := holder.Connect(invitation)
-			require.NoError(t, err)
-			require.NotNil(t, holderConnectionID)
-
-			invitationIDs = append(invitationIDs, invitation.ID)
-		}
 
 		// Init Precomputation's generator.
 		thresholdbbsplusGenerator := NewThresholdBBSPlusGenerator()
@@ -146,6 +110,44 @@ func TestIssueThresholdCredential(t *testing.T) {
 
 		collectionID, publicKeyDoc, precomputationDocs, err := thresholdbbsplusGenerator.GeneratePrecomputation(sha256.New, seed, threshold, n, k)
 		require.NoError(t, err)
+
+		err = holder.AddCollection(collectionID)
+		require.NoError(t, err)
+
+		// Init Party Signers' wallets.
+		signers := make([]*PartySigner, n)
+		for i := 0; i < n; i++ {
+			inboundSigner, err := http.NewInbound(fmt.Sprintf(endpointSigner, i), externalPrefix+fmt.Sprintf(endpointSigner, i), "", "")
+			require.NoError(t, err)
+
+			documentLoader, err := ldtestutil.DocumentLoader()
+			require.NoError(t, err)
+			signerAries, err := aries.New(aries.WithInboundTransport(inboundSigner), aries.WithJSONLDDocumentLoader(documentLoader))
+			require.NoError(t, err)
+
+			mockctxSigner, err := signerAries.Context()
+			require.NoError(t, err)
+
+			err = CreateProfile(fmt.Sprintf(sampleSignerID, i), mockctxSigner, wallet.WithPassphrase(samplePassPhrase))
+			require.NoError(t, err)
+			signers[i], err = NewPartySigner(fmt.Sprintf(sampleSignerID, i), mockctxSigner, wallet.WithUnlockByPassphrase(samplePassPhrase))
+			require.NoError(t, err)
+			require.NotNil(t, signers[i])
+
+			invitation, err := signers[i].Invite(signerID)
+			require.NoError(t, err)
+
+			_, err = holder.Connect(invitation)
+			require.NoError(t, err)
+
+			connection, err := holder.GetConnection(invitation.ID)
+			require.NoError(t, err)
+
+			// holder adds contacts of signers.
+			err = holder.AddPartySigner(collectionID, connection)
+			require.NoError(t, err)
+		}
+
 		for idx, signer := range signers {
 			err := signer.AddCollection(collectionID)
 			require.NoError(t, err)
@@ -155,13 +157,6 @@ func TestIssueThresholdCredential(t *testing.T) {
 
 			err = signer.Store(precomputationDocs[idx])
 			require.NoError(t, err)
-		}
-
-		for _, inviationID := range invitationIDs {
-			connection, err := holder.GetConnection(inviationID)
-			require.NoError(t, err)
-			require.NotNil(t, connection)
-			holder.AddPartySigner(collectionID, connection)
 		}
 
 		// Set threshold after all signers have been added.
