@@ -153,7 +153,7 @@ func toVerifiableCredentials(v vdrapi.Registry, attachments []decorator.Attachme
 
 		vc, err := verifiable.ParseCredential(rawVC,
 			verifiable.WithPublicKeyFetcher(verifiable.NewVDRKeyResolver(v).PublicKeyFetcher()),
-			verifiable.WithJSONLDDocumentLoader(documentLoader))
+			verifiable.WithJSONLDDocumentLoader(documentLoader), verifiable.WithDisabledProofCheck())
 		if err != nil {
 			return nil, fmt.Errorf("new credential: %w", err)
 		}
