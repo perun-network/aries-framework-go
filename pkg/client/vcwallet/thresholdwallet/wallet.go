@@ -30,7 +30,7 @@ type Wallet interface {
 	Close() error
 
 	// DefaultHandler starts a handler, which automatically accepts all DIDComm Messages from DIDExchange and IssueCredential.
-	DefaultHandler()
+	DefaultHandler() error
 
 	// StartHandler starts a custom handler, which responses to incoming DIDComm Messages from the given channel.
 	CustomHandler(channel chan service.DIDCommAction, credentialHandler func(events chan service.DIDCommAction)) error
