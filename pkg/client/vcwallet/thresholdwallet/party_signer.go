@@ -97,10 +97,6 @@ func NewPartySigner(userID string, ctx provider, options ...wallet.UnlockOptions
 		context:         ctx,
 		collectionIDs:   make([]string, 0),
 	}
-	err = partysigner.handle()
-	if err != nil {
-		return nil, err
-	}
 	return partysigner, nil
 }
 
@@ -133,16 +129,11 @@ func (c *PartySigner) Open(options ...wallet.UnlockOptions) error {
 	if err := c.vcwallet.Open(options...); err != nil {
 		return err
 	}
-
-	err := c.handle()
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
 // Handle runs the agent's handlers for didexchange and issue credential.
-func (c *PartySigner) handle() error {
+func (c *PartySigner) DefaultHandler() error {
 	err := c.handleDidExchange()
 	if err != nil {
 		return err
@@ -152,6 +143,22 @@ func (c *PartySigner) handle() error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+// StartHandler starts a custom handler, which responses to incoming DIDComm Messages from the given channel.
+func (c *PartySigner) CustomHandler(actions chan service.DIDCommAction, credentialHandler func(events chan service.DIDCommAction)) error {
+	err := c.handleDidExchange()
+	if err != nil {
+		return err
+	}
+
+	err = c.didexchange.RegisterActionEvent(actions)
+	if err != nil {
+		return fmt.Errorf("failed to register channel for %s: %w", c.userID, err)
+	}
+
+	go credentialHandler(actions)
 	return nil
 }
 
@@ -201,11 +208,11 @@ func (c *PartySigner) handleIssueCredential() error {
 			switch event.Message.Type() {
 			case credential.ProposeCredentialMsgTypeV2:
 				log.Println("Received proposal")
-				arg, options, err = c.replayProposal(event.Message)
+				arg, options, err = c.ReplayProposal(event.Message)
 				err = saveOptionsIfNoError(err, db, event.Message, options)
 			case credential.RequestCredentialMsgTypeV2:
 				log.Println("Received request")
-				arg, options, err = c.issueCredential(event.Message)
+				arg, options, err = c.ReplayRequest(event.Message)
 				err = saveOptionsIfNoError(err, db, event.Message, options)
 			default:
 				event.Stop(fmt.Errorf("rfc0593: unsupported issue credential message type"))
@@ -541,7 +548,7 @@ func (c *PartySigner) GetConnection(invitation *didexchange.Invitation) (*didexc
 }
 
 // replayProposal responses to a credential proposal with a corresponding offer.
-func (c *PartySigner) replayProposal(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error) {
+func (c *PartySigner) ReplayProposal(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error) {
 	proposal := &issuecredential.ProposeCredentialV2{}
 
 	err := msg.Decode(proposal)
@@ -573,8 +580,8 @@ func (c *PartySigner) replayProposal(msg service.DIDCommMsg) (interface{}, *rfc0
 	}), payload.Options, nil
 }
 
-// issueCredential responses to a request message by creates a issue credential message.
-func (c *PartySigner) issueCredential(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error) {
+// ReplayRequest responses to a request message by creates a issue credential message.
+func (c *PartySigner) ReplayRequest(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error) {
 	request := &issuecredential.RequestCredentialV2{}
 
 	err := msg.Decode(request)
@@ -595,6 +602,16 @@ func (c *PartySigner) issueCredential(msg service.DIDCommMsg) (interface{}, *rfc
 	ic.Comment = fmt.Sprintf("response to request with id %s", msg.ID())
 
 	return credential.WithIssueCredentialV2(ic), payload.Options, nil
+}
+
+// ReplayProposal responses to a credential proposal with a corresponding offer.
+func (c *PartySigner) ReplayOffer(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error) {
+	return nil, nil, errors.New("unsupported message")
+}
+
+// ReplayProposal responses to a credential proposal with a corresponding offer.
+func (c *PartySigner) ReplayCredential(db storage.Store, msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error) {
+	return nil, nil, errors.New("unsupported message")
 }
 
 // createIssueCredentialMsg signs the credential and creates a corresponding message for holder.

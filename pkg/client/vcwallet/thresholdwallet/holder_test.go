@@ -32,7 +32,7 @@ func TestCreateProfile(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, ProfileExists(sampleHolderID, mockctx))
 
-		holder, err := NewHolder(sampleHolderID, mockctx)
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx)
 		require.NoError(t, err)
 		require.NotEmpty(t, holder)
 	})
@@ -43,7 +43,7 @@ func TestCreateProfile(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, ProfileExists(sampleHolderID, mockctx))
 
-		holder, err := NewHolder(sampleHolderID, mockctx)
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx)
 		require.NoError(t, err)
 		require.NotEmpty(t, holder)
 	})
@@ -54,7 +54,7 @@ func TestCreateProfile(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, ProfileExists(sampleHolderID, mockctx))
 
-		holder, err := NewHolder(sampleHolderID, mockctx)
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx)
 		require.NoError(t, err)
 		require.NotEmpty(t, holder)
 	})
@@ -66,7 +66,7 @@ func TestCreateProfile(t *testing.T) {
 		require.Contains(t, err.Error(), "invalid create profile options")
 		require.True(t, errors.Is(ProfileExists(sampleHolderID, mockctx), wallet.ErrProfileNotFound))
 
-		holder, err := NewHolder(sampleHolderID, mockctx)
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx)
 		require.Error(t, err)
 		require.Empty(t, holder)
 	})
@@ -81,7 +81,7 @@ func TestCreateProfile(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), sampleClientErr)
 
-		holder, err := NewHolder(sampleHolderID, mockctx)
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx)
 		require.Error(t, err)
 		require.Empty(t, holder)
 
@@ -102,7 +102,7 @@ func TestCreateProfile(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), sampleClientErr)
 
-		holder, err := NewHolder(sampleHolderID, mockctx)
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx)
 		require.Error(t, err)
 		require.Empty(t, holder)
 	})
@@ -117,7 +117,7 @@ func TestCreateProfile(t *testing.T) {
 		err := CreateProfile(sampleHolderID, mockctx, wallet.WithKeyServerURL(sampleKeyServerURL))
 		require.NoError(t, err)
 
-		holder, err := NewHolder(sampleHolderID, mockctx)
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), sampleClientErr)
 		require.Empty(t, holder)
@@ -132,7 +132,7 @@ func TestUpdate(t *testing.T) {
 		err := UpdateProfile(sampleHolderID, mockctx, wallet.WithPassphrase(samplePassPhrase))
 		require.NoError(t, err)
 
-		holder, err := NewHolder(sampleHolderID, mockctx)
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx)
 		require.NoError(t, err)
 		require.NotEmpty(t, holder)
 	})
@@ -144,7 +144,7 @@ func TestUpdate(t *testing.T) {
 		err := UpdateProfile(sampleHolderID, mockctx, wallet.WithSecretLockService(&secretlock.MockSecretLock{}))
 		require.NoError(t, err)
 
-		holder, err := NewHolder(sampleHolderID, mockctx)
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx)
 		require.NoError(t, err)
 		require.NotEmpty(t, holder)
 	})
@@ -156,7 +156,7 @@ func TestUpdate(t *testing.T) {
 		err := UpdateProfile(sampleHolderID, mockctx, wallet.WithKeyServerURL(sampleKeyServerURL))
 		require.NoError(t, err)
 
-		holder, err := NewHolder(sampleHolderID, mockctx)
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx)
 		require.NoError(t, err)
 		require.NotEmpty(t, holder)
 	})
@@ -169,7 +169,7 @@ func TestUpdate(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid create profile options")
 
-		holder, err := NewHolder(sampleHolderID, mockctx)
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx)
 		require.NoError(t, err)
 		require.NotEmpty(t, holder)
 	})
@@ -180,7 +180,7 @@ func TestUpdate(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "profile does not exist")
 
-		holder, err := NewHolder(sampleHolderID, mockctx)
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx)
 		require.Error(t, err)
 		require.Empty(t, holder)
 	})
@@ -195,7 +195,7 @@ func TestUpdate(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), sampleClientErr)
 
-		holder, err := NewHolder(sampleHolderID, mockctx)
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx)
 		require.Error(t, err)
 		require.Empty(t, holder)
 	})
@@ -210,7 +210,7 @@ func TestUpdate(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), sampleClientErr)
 
-		holder, err := NewHolder(sampleHolderID, mockctx)
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx)
 		require.NoError(t, err)
 		require.NotEmpty(t, holder)
 	})
@@ -223,7 +223,7 @@ func TestNewHolder(t *testing.T) {
 		err := CreateProfile(sampleHolderID, mockctx, wallet.WithPassphrase(samplePassPhrase))
 		require.NoError(t, err)
 
-		holder, err := NewHolder(sampleHolderID, mockctx)
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx)
 		require.NoError(t, err)
 		require.NotEmpty(t, holder)
 	})
@@ -234,7 +234,7 @@ func TestNewHolder(t *testing.T) {
 		err := CreateProfile(sampleHolderID, mockctx, wallet.WithPassphrase(samplePassPhrase))
 		require.NoError(t, err)
 
-		holder, err := NewHolder(sampleHolderID, mockctx, wallet.WithUnlockByPassphrase(samplePassPhrase))
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx, wallet.WithUnlockByPassphrase(samplePassPhrase))
 		require.NoError(t, err)
 		require.NotEmpty(t, holder)
 	})
@@ -245,7 +245,7 @@ func TestNewHolder(t *testing.T) {
 		err := CreateProfile(sampleHolderID, mockctx, wallet.WithPassphrase(samplePassPhrase))
 		require.NoError(t, err)
 
-		holder, err := NewHolder(sampleHolderID, mockctx, wallet.WithUnlockByPassphrase(samplePassPhrase+"ss"))
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx, wallet.WithUnlockByPassphrase(samplePassPhrase+"ss"))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "message authentication failed")
 		require.Empty(t, holder)
@@ -256,7 +256,7 @@ func TestNewHolder(t *testing.T) {
 		err := CreateProfile(sampleHolderID, mockctx, wallet.WithPassphrase(samplePassPhrase))
 		require.NoError(t, err)
 
-		holder, err := NewHolder(sampleHolderID+"invalid", mockctx)
+		holder, err := NewHolder(sampleHolderID+"invalid", SigningDelay, mockctx)
 		require.Empty(t, holder)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "profile does not exist")
@@ -268,7 +268,7 @@ func TestNewHolder(t *testing.T) {
 			ErrOpenStoreHandle: fmt.Errorf(sampleClientErr),
 		}
 
-		holder, err := NewHolder(sampleHolderID, mockctx)
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx)
 		require.Error(t, err)
 		require.Empty(t, holder)
 		require.Contains(t, err.Error(), sampleClientErr)
@@ -283,7 +283,7 @@ func TestHolder_OpenClose(t *testing.T) {
 		err := CreateProfile(sampleHolder, mockctx, wallet.WithPassphrase(samplePassPhrase))
 		require.NoError(t, err)
 
-		holder, err := NewHolder(sampleHolder, mockctx)
+		holder, err := NewHolder(sampleHolder, SigningDelay, mockctx)
 		require.NoError(t, err)
 		require.NotEmpty(t, holder)
 
@@ -318,7 +318,7 @@ func TestHolder_OpenClose(t *testing.T) {
 		err = CreateProfile(sampleHolder, mockctx, wallet.WithSecretLockService(masterLock))
 		require.NoError(t, err)
 
-		holder, err := NewHolder(sampleHolder, mockctx)
+		holder, err := NewHolder(sampleHolder, SigningDelay, mockctx)
 		require.NoError(t, err)
 		require.NotEmpty(t, holder)
 
@@ -353,7 +353,7 @@ func TestHolder_OpenClose(t *testing.T) {
 		err := CreateProfile(sampleHolder, mockctx, wallet.WithKeyServerURL(sampleKeyServerURL))
 		require.NoError(t, err)
 
-		holder, err := NewHolder(sampleHolder, mockctx)
+		holder, err := NewHolder(sampleHolder, SigningDelay, mockctx)
 		require.NoError(t, err)
 		require.NotEmpty(t, holder)
 
@@ -380,7 +380,7 @@ func createSampleProfile(t *testing.T, mockctx *mockprovider.Provider) {
 	err := CreateProfile(sampleHolderID, mockctx, wallet.WithPassphrase(samplePassPhrase))
 	require.NoError(t, err)
 
-	holder, err := NewHolder(sampleHolderID, mockctx)
+	holder, err := NewHolder(sampleHolderID, SigningDelay, mockctx)
 	require.NoError(t, err)
 	require.NotEmpty(t, holder)
 }
@@ -390,7 +390,7 @@ func TestHolder_Store(t *testing.T) {
 	err := CreateProfile(sampleHolderID, mockctx, wallet.WithKeyServerURL(sampleKeyServerURL))
 	require.NoError(t, err)
 
-	holderClient, err := NewHolder(sampleHolderID, mockctx, wallet.WithUnlockByPassphrase(samplePassPhrase))
+	holderClient, err := NewHolder(sampleHolderID, SigningDelay, mockctx, wallet.WithUnlockByPassphrase(samplePassPhrase))
 	require.NotEmpty(t, holderClient)
 	require.NoError(t, err)
 
@@ -400,7 +400,7 @@ func TestHolder_Store(t *testing.T) {
 	require.NoError(t, err)
 
 	// try locked wallet
-	holderClient, err = NewHolder(sampleHolderID, mockctx)
+	holderClient, err = NewHolder(sampleHolderID, SigningDelay, mockctx)
 	require.NotEmpty(t, holderClient)
 	require.NoError(t, err)
 
@@ -413,7 +413,7 @@ func TestHolder_Get(t *testing.T) {
 	err := CreateProfile(sampleHolderID, mockctx, wallet.WithPassphrase(samplePassPhrase))
 	require.NoError(t, err)
 
-	holderClient, err := NewHolder(sampleHolderID, mockctx, wallet.WithUnlockByPassphrase(samplePassPhrase))
+	holderClient, err := NewHolder(sampleHolderID, SigningDelay, mockctx, wallet.WithUnlockByPassphrase(samplePassPhrase))
 	require.NotEmpty(t, holderClient)
 	require.NoError(t, err)
 
@@ -462,7 +462,7 @@ func TestHolder_GetCollection(t *testing.T) {
 	err := CreateProfile(sampleHolderID, mockctx, wallet.WithPassphrase(samplePassPhrase))
 	require.NoError(t, err)
 
-	holderClient, err := NewHolder(sampleHolderID, mockctx, wallet.WithUnlockByPassphrase(samplePassPhrase))
+	holderClient, err := NewHolder(sampleHolderID, SigningDelay, mockctx, wallet.WithUnlockByPassphrase(samplePassPhrase))
 	require.NotEmpty(t, holderClient)
 	require.NoError(t, err)
 
@@ -495,7 +495,7 @@ func TestHolder_Remove(t *testing.T) {
 	err := CreateProfile(sampleHolderID, mockctx, wallet.WithKeyServerURL(sampleKeyServerURL))
 	require.NoError(t, err)
 
-	holderClient, err := NewHolder(sampleHolderID, mockctx, wallet.WithUnlockByPassphrase(samplePassPhrase))
+	holderClient, err := NewHolder(sampleHolderID, SigningDelay, mockctx, wallet.WithUnlockByPassphrase(samplePassPhrase))
 	require.NotEmpty(t, holderClient)
 	require.NoError(t, err)
 
@@ -540,7 +540,7 @@ func TestHolder_RemoveCollection(t *testing.T) {
 	err := CreateProfile(sampleHolderID, mockctx, wallet.WithPassphrase(samplePassPhrase))
 	require.NoError(t, err)
 
-	holderClient, err := NewHolder(sampleHolderID, mockctx, wallet.WithUnlockByPassphrase(samplePassPhrase))
+	holderClient, err := NewHolder(sampleHolderID, SigningDelay, mockctx, wallet.WithUnlockByPassphrase(samplePassPhrase))
 	require.NotEmpty(t, holderClient)
 	require.NoError(t, err)
 

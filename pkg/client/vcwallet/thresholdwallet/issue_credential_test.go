@@ -98,9 +98,12 @@ func TestIssueThresholdCredential(t *testing.T) {
 
 		err = CreateProfile(sampleHolderID, mockctxHolder, wallet.WithPassphrase(samplePassPhrase))
 		require.NoError(t, err)
-		holder, err := NewHolder(sampleHolderID, mockctxHolder, wallet.WithUnlockByPassphrase(samplePassPhrase))
+		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctxHolder, wallet.WithUnlockByPassphrase(samplePassPhrase))
 		require.NoError(t, err)
 		require.NotNil(t, holder)
+
+		err = holder.DefaultHandler()
+		require.NoError(t, err)
 
 		// Init Precomputation's generator.
 		thresholdbbsplusGenerator := NewThresholdBBSPlusGenerator()
@@ -133,6 +136,9 @@ func TestIssueThresholdCredential(t *testing.T) {
 			signers[i], err = NewPartySigner(fmt.Sprintf(sampleSignerID, i), mockctxSigner, wallet.WithUnlockByPassphrase(samplePassPhrase))
 			require.NoError(t, err)
 			require.NotNil(t, signers[i])
+
+			err = signers[i].DefaultHandler()
+			require.NoError(t, err)
 
 			invitation, err := signers[i].Invite(signerID)
 			require.NoError(t, err)

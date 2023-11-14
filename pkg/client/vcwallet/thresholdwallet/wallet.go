@@ -19,7 +19,7 @@ import (
 const (
 	StoreName = "RFC0593TransientStore"
 
-	signingDelay = 10 * time.Second
+	SigningDelay = 10 * time.Second // Default Delay for waiting partial signatures.
 )
 
 type Wallet interface {
@@ -29,6 +29,24 @@ type Wallet interface {
 	// Close shutdowns the wallet's services.
 	Close() error
 
+	// DefaultHandler starts a handler, which automatically accepts all DIDComm Messages from DIDExchange and IssueCredential.
+	DefaultHandler()
+
+	// StartHandler starts a custom handler, which responses to incoming DIDComm Messages from the given channel.
+	CustomHandler(channel chan service.DIDCommAction, credentialHandler func(events chan service.DIDCommAction)) error
+
+	// ReplayProposal responses to a credential proposal with a corresponding offer.
+	ReplayProposal(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error)
+
+	// ReplayOffers responses to an issuecredential offer with a corresponding request.
+	ReplayOffer(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error)
+
+	// ReplayRequest responses to a request message by creates a issue credential message.
+	ReplayRequest(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error)
+
+	// ReplayCredential responses to an credential message.
+	ReplayCredential(db storage.Store, msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error)
+
 	// Store adds a new document to wallet.
 	Store(document *Document) error
 
@@ -36,7 +54,7 @@ type Wallet interface {
 	AddCollection(collectionID string) error
 
 	// Get retrieves a document from the wallet based on its content type and ID.
-	Get(contentType ContentType, documentID string) (*Document, error)
+	Get(contentType ContentType, documentID string, collectionID string) (*Document, error)
 
 	// GetCollection retrieves all documents from a collection based on the collectionID.
 	GetCollection(collectionID string) ([]*Document, error)

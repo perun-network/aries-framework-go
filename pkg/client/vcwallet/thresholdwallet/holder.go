@@ -23,12 +23,14 @@ import (
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/suite/bbsblssignature2020"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/verifiable"
 	"github.com/hyperledger/aries-framework-go/pkg/wallet"
+	"github.com/hyperledger/aries-framework-go/spi/storage"
 	"golang.org/x/exp/slices"
 )
 
 // Holders is a Wallet Client that want a credential to be signed
 // and request the signing with all party signers.
 type Holder struct {
+	signingDelay      time.Duration
 	userID            string
 	didexchange       *didexchange.Client
 	issuecredential   *issuecredential.Client
@@ -39,6 +41,7 @@ type Holder struct {
 	msgIndex          map[string]int                       // msgIndex must be obtained from the precomputation generator, each collectionID has its own.
 	partySigners      map[string][]*didexchange.Connection // each collectionID will have an array of collection to its threshold signers.
 	partialSignatures map[string][][]byte                  // An array of partial signatures for each collectionID.
+	waitChanns        map[string]chan bool                 // Channel waiting for singing partial signatures for each collectionID.
 }
 
 // NewHolder returns new holder client with verifiable credential wallet for given user.
@@ -52,7 +55,7 @@ type Holder struct {
 // returns error if wallet profile is not found.
 // To create a new wallet profile, use `CreateProfile()`.
 // To update an existing profile, use `UpdateProfile()`.
-func NewHolder(userID string, ctx provider, options ...wallet.UnlockOptions) (*Holder, error) {
+func NewHolder(userID string, signingDelay time.Duration, ctx provider, options ...wallet.UnlockOptions) (*Holder, error) {
 	didexchangeSvc, err := didexchange.New(ctx)
 	if err != nil {
 		return nil, err
@@ -67,7 +70,9 @@ func NewHolder(userID string, ctx provider, options ...wallet.UnlockOptions) (*H
 	if err != nil {
 		return nil, err
 	}
+
 	holder := &Holder{
+		signingDelay:      signingDelay,
 		userID:            userID,
 		vcwallet:          vcwallet,
 		didexchange:       didexchangeSvc,
@@ -78,10 +83,7 @@ func NewHolder(userID string, ctx provider, options ...wallet.UnlockOptions) (*H
 		msgIndex:          make(map[string]int),
 		partySigners:      make(map[string][]*didexchange.Connection),
 		partialSignatures: make(map[string][][]byte),
-	}
-	err = holder.handle()
-	if err != nil {
-		return nil, err
+		waitChanns:        make(map[string]chan bool),
 	}
 	return holder, nil
 }
@@ -96,15 +98,11 @@ func (c *Holder) Open(options ...wallet.UnlockOptions) error {
 	if err := c.vcwallet.Open(options...); err != nil {
 		return err
 	}
-	err := c.handle()
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
 // Handle runs the agent's handlers for didexchange and issue credential.
-func (c *Holder) handle() error {
+func (c *Holder) DefaultHandler() error {
 	err := c.handleDidExchange()
 	if err != nil {
 		return err
@@ -114,6 +112,22 @@ func (c *Holder) handle() error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+// StartHandler starts a custom handler, which responses to incoming DIDComm Messages from the given channel.
+func (c *Holder) CustomHandler(actions chan service.DIDCommAction, credentialHandler func(events chan service.DIDCommAction)) error {
+	err := c.handleDidExchange()
+	if err != nil {
+		return err
+	}
+
+	err = c.didexchange.RegisterActionEvent(actions)
+	if err != nil {
+		return fmt.Errorf("failed to register channel for %s: %w", c.userID, err)
+	}
+
+	go credentialHandler(actions)
 	return nil
 }
 
@@ -164,22 +178,11 @@ func (c *Holder) handleIssueCredential() error {
 			switch messType {
 			case credential.OfferCredentialMsgTypeV2:
 				log.Println("Received offer")
-				arg, options, err = c.replayOffer(event.Message)
+				arg, options, err = c.ReplayOffer(event.Message)
 				err = saveOptionsIfNoError(err, db, event.Message, options)
 			case credential.IssueCredentialMsgTypeV2:
 				log.Println("Received credential")
-				options, err = fetchCredentialSpecOptions(db, event.Message)
-				if err != nil {
-					err = fmt.Errorf("failed to fetch credential spec options to validate credential: %w", err)
-					break
-				}
-
-				var partialSignature []byte
-				arg, partialSignature, err = fetchPartialCredential(c.context, uuid.New().String(), event.Message)
-				if err == nil {
-					collectionID := options.Status.Type
-					c.partialSignatures[collectionID] = append(c.partialSignatures[collectionID], partialSignature)
-				}
+				arg, _, err = c.ReplayCredential(db, event.Message)
 			default:
 				event.Stop(fmt.Errorf("rfc0593: unsupported issue credential messages"))
 				continue
@@ -433,7 +436,7 @@ func (c *Holder) Sign(credential *Document) (*Document, error) {
 	indices := generateRandomIndices(c.threshold[credential.CollectionID], len(c.partySigners[credential.CollectionID])) // Choose random signers.
 	// Obtains partial signatures.
 	c.partialSignatures[credential.CollectionID] = make([][]byte, 0)
-
+	c.waitChanns[credential.CollectionID] = make(chan bool)
 	for i := 0; i < c.threshold[credential.CollectionID]; i++ {
 		// Create a channel to signal that the timeout has occurred
 		partialCredential := NewDocument(Credential, credential.Content, credential.CollectionID)
@@ -444,37 +447,41 @@ func (c *Holder) Sign(credential *Document) (*Document, error) {
 		c.ProposeCredential(c.partySigners[credential.CollectionID][indices[i]-1], partialCredential)
 		log.Printf("Holder proposed credential to signer %d", indices[i]-1)
 	}
-	time.Sleep(signingDelay) // Wait for all parties to sign the credential.
-	// Create Threshold BBS+ Signature Suite.
-	thresholdSigner := signer.NewThresholdBBSG2SignatureSigner(c.threshold[credential.CollectionID], credential.MsgIndex, c.partialSignatures[credential.CollectionID])
-	sigSuite := bbsblssignature2020.New(
-		suite.WithSigner(thresholdSigner),
-		suite.WithVerifier(bbsblssignature2020.NewG2PublicKeyVerifier()))
+	// Wait for all parties to sign the credential.
+	select {
+	case <-c.waitChanns[credential.CollectionID]:
+		// Create Threshold BBS+ Signature Suite.
+		thresholdSigner := signer.NewThresholdBBSG2SignatureSigner(c.threshold[credential.CollectionID], credential.MsgIndex, c.partialSignatures[credential.CollectionID])
+		sigSuite := bbsblssignature2020.New(
+			suite.WithSigner(thresholdSigner),
+			suite.WithVerifier(bbsblssignature2020.NewG2PublicKeyVerifier()))
 
-	createdFormated, err := time.Parse(time.RFC3339, created.Format(time.RFC3339))
-	if err != nil {
-		return nil, err
-	}
-	ldpContext := &verifiable.LinkedDataProofContext{
-		SignatureType:           "BbsBlsSignature2020",
-		SignatureRepresentation: verifiable.SignatureProofValue,
-		Suite:                   sigSuite,
-		VerificationMethod:      "did:bbspublickey#key",
-		Created:                 &createdFormated,
-	}
+		createdFormated, err := time.Parse(time.RFC3339, created.Format(time.RFC3339))
+		if err != nil {
+			return nil, err
+		}
+		ldpContext := &verifiable.LinkedDataProofContext{
+			SignatureType:           "BbsBlsSignature2020",
+			SignatureRepresentation: verifiable.SignatureProofValue,
+			Suite:                   sigSuite,
+			VerificationMethod:      "did:bbspublickey#key",
+			Created:                 &createdFormated,
+		}
 
-	err = vc.AddLinkedDataProof(ldpContext, jsonld.WithDocumentLoader(c.context.JSONLDDocumentLoader()))
-	if err != nil {
-		return nil, err
-	}
+		err = vc.AddLinkedDataProof(ldpContext, jsonld.WithDocumentLoader(c.context.JSONLDDocumentLoader()))
+		if err != nil {
+			return nil, err
+		}
 
-	vcSignedBytes, err := json.Marshal(vc)
-	if err != nil {
-		return nil, err
+		vcSignedBytes, err := json.Marshal(vc)
+		if err != nil {
+			return nil, err
+		}
+		credential.Content = vcSignedBytes
+		return credential, nil
+	case <-time.After(c.signingDelay):
+		return nil, errors.New("timeout waiting for partial signatures")
 	}
-	credential.Content = vcSignedBytes
-	return credential, nil
-
 }
 
 // Verify checked the signed credential and used the given public key to verify its signature.
@@ -721,8 +728,30 @@ func fetchPartialCredential(p provider, name string, msg service.DIDCommMsg) (in
 	return credential.WithFriendlyNames(name), partialSignature, nil
 }
 
-// replayOffers responses to an issuecredential offer with a corresponding request.
-func (c *Holder) replayOffer(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error) {
+// ReplayCredential responses to a message contains a partial signed credential by getting the partial signature,
+// and check if all the partial signatures were collected.
+func (c *Holder) ReplayCredential(db storage.Store, msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error) {
+	options, err := fetchCredentialSpecOptions(db, msg)
+	if err != nil {
+		err = fmt.Errorf("failed to fetch credential spec options to validate credential: %w", err)
+		return nil, nil, err
+	}
+
+	var partialSignature []byte
+	arg, partialSignature, err := fetchPartialCredential(c.context, uuid.New().String(), msg)
+	if err == nil {
+		collectionID := options.Status.Type
+		c.partialSignatures[collectionID] = append(c.partialSignatures[collectionID], partialSignature)
+		if len(c.partialSignatures[collectionID]) == c.threshold[collectionID] {
+			c.waitChanns[collectionID] <- true
+			close(c.waitChanns[collectionID])
+		}
+	}
+	return arg, options, err
+}
+
+// ReplayOffers responses to an issuecredential offer with a corresponding request.
+func (c *Holder) ReplayOffer(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error) {
 	offer := &credential.OfferCredentialV2{}
 
 	err := msg.Decode(offer)
@@ -752,6 +781,16 @@ func (c *Holder) replayOffer(msg service.DIDCommMsg) (interface{}, *rfc0593.Cred
 			},
 		}},
 	}), payload.Options, nil
+}
+
+// ReplayProposal responses to a credential proposal with a corresponding offer.
+func (c *Holder) ReplayProposal(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error) {
+	return nil, nil, errors.New("unsupported message")
+}
+
+// ReplayProposal responses to a credential proposal with a corresponding offer.
+func (c *Holder) ReplayRequest(msg service.DIDCommMsg) (interface{}, *rfc0593.CredentialSpecOptions, error) {
+	return nil, nil, errors.New("unsupported message")
 }
 
 // GetCredentialSpec extracts the CredentialSpec from the formats and attachments.
