@@ -531,10 +531,10 @@ func (c *PartySigner) Connect(invitation *didexchange.Invitation) (string, error
 }
 
 // GetConnection gets a connection of the wallet through its inviation.
-func (c *PartySigner) GetConnection(invitation *didexchange.Invitation) (*didexchange.Connection, error) {
+func (c *PartySigner) GetConnection(invitationID string) (*didexchange.Connection, error) {
 	connections, err := c.didexchange.QueryConnections(
 		&didexchange.QueryConnectionsParams{
-			InvitationID: invitation.ID,
+			InvitationID: invitationID,
 		})
 	if err != nil {
 		return nil, err

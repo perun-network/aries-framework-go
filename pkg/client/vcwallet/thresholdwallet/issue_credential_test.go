@@ -98,6 +98,7 @@ func TestIssueThresholdCredential(t *testing.T) {
 
 		err = CreateProfile(sampleHolderID, mockctxHolder, wallet.WithPassphrase(samplePassPhrase))
 		require.NoError(t, err)
+
 		holder, err := NewHolder(sampleHolderID, SigningDelay, mockctxHolder, wallet.WithUnlockByPassphrase(samplePassPhrase))
 		require.NoError(t, err)
 		require.NotNil(t, holder)
@@ -118,7 +119,7 @@ func TestIssueThresholdCredential(t *testing.T) {
 		require.NoError(t, err)
 
 		// Init Party Signers' wallets.
-		signers := make([]*PartySigner, n)
+		signers := make([]Wallet, n)
 		for i := 0; i < n; i++ {
 			inboundSigner, err := http.NewInbound(fmt.Sprintf(endpointSigner, i), externalPrefix+fmt.Sprintf(endpointSigner, i), "", "")
 			require.NoError(t, err)

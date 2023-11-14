@@ -13,6 +13,7 @@ import (
 	credential "github.com/hyperledger/aries-framework-go/pkg/didcomm/protocol/issuecredential"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/suite/bbsblssignature2020"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/verifiable"
+	"github.com/hyperledger/aries-framework-go/pkg/wallet"
 	"github.com/hyperledger/aries-framework-go/spi/storage"
 )
 
@@ -24,7 +25,7 @@ const (
 
 type Wallet interface {
 	// Open opens makes the wallet's services available.
-	Open() error
+	Open(options ...wallet.UnlockOptions) error
 
 	// Close shutdowns the wallet's services.
 	Close() error
