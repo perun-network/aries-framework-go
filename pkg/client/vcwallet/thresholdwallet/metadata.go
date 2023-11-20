@@ -50,7 +50,9 @@ func credentialFromDocument(document *Document) (*verifiable.Credential, error) 
 
 // documentFromCredential creates a document from a verifiable credential.
 func documentFromCredential(vcByte []byte, collectionID string) (*Document, error) {
-	vc, err := verifiable.ParseCredential(vcByte, verifiable.WithCredDisableValidation())
+	vc, err := verifiable.ParseCredential(vcByte,
+		verifiable.WithCredDisableValidation(),
+		verifiable.WithDisabledProofCheck())
 	if err != nil {
 		return nil, err
 	}

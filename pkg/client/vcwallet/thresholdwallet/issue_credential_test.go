@@ -184,6 +184,13 @@ func TestIssueThresholdCredential(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, signedCredentialDoc)
 
+		err = holder.Store(signedCredentialDoc)
+		require.NoError(t, err)
+
+		signedCredentialDoc2, err := holder.Get(Credential, signedCredentialDoc.ID, signedCredentialDoc.CollectionID)
+		require.NoError(t, err)
+		require.NotNil(t, signedCredentialDoc2)
+
 		signedCredential, err := credentialFromDocument(signedCredentialDoc)
 		require.NoError(t, err)
 		require.NotNil(t, signedCredential.Proofs)
@@ -192,6 +199,10 @@ func TestIssueThresholdCredential(t *testing.T) {
 		verificationResult, err := holder.Verify(signedCredentialDoc, publicKeyDoc)
 		require.NoError(t, err)
 		require.True(t, verificationResult)
+
+		verificationResult2, err := holder.Verify(signedCredentialDoc2, publicKeyDoc)
+		require.NoError(t, err)
+		require.True(t, verificationResult2)
 	})
 }
 
