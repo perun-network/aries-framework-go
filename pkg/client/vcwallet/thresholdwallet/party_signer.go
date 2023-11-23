@@ -209,11 +209,11 @@ func (c *PartySigner) handleIssueCredential() error {
 			case credential.ProposeCredentialMsgTypeV2:
 				log.Println("Received proposal")
 				arg, options, err = c.ReplayProposal(event.Message)
-				err = saveOptionsIfNoError(err, db, event.Message, options)
+				err = SaveOptionsIfNoError(err, db, event.Message, options)
 			case credential.RequestCredentialMsgTypeV2:
 				log.Println("Received request")
 				arg, options, err = c.ReplayRequest(event.Message)
-				err = saveOptionsIfNoError(err, db, event.Message, options)
+				err = SaveOptionsIfNoError(err, db, event.Message, options)
 			default:
 				event.Stop(fmt.Errorf("rfc0593: unsupported issue credential message type"))
 				continue

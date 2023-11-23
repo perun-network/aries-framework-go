@@ -135,8 +135,8 @@ func formatList() []credential.Format {
 	}
 }
 
-// saveOptionsIfNoError saves message's data for processing.
-func saveOptionsIfNoError(err error, s storage.Store, msg service.DIDCommMsg, options *rfc0593.CredentialSpecOptions) error {
+// SaveOptionsIfNoError saves message's data for processing.
+func SaveOptionsIfNoError(err error, s storage.Store, msg service.DIDCommMsg, options *rfc0593.CredentialSpecOptions) error {
 	if err != nil {
 		return err
 	}

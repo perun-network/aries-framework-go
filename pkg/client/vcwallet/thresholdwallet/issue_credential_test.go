@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
+	"log"
 	"testing"
 
 	"github.com/hyperledger/aries-framework-go/pkg/didcomm/protocol/didexchange"
@@ -33,8 +34,8 @@ const (
 	sampleSignerID = "sample-signer%d"
 
 	externalPrefix = "http://"
-	endpointHolder = "localhost:26609"
-	endpointSigner = "localhost:2660%d"
+	endpointHolder = "localhost:26709"
+	endpointSigner = "localhost:2670%d"
 
 	samplePassPhrase    = "fakepassphrase"
 	sampleRemoteKMSAuth = "sample-auth-token"
@@ -53,7 +54,7 @@ func TestIssueThresholdCredential(t *testing.T) {
 	   "https://w3id.org/citizenship/v1",
 	   "https://w3id.org/security/bbs/v1"
 	 ],
-	 "id": "https://issuer.oidp.uscis.gov/credentials/83627465",
+	 "id": "did:credential:urn:uuid:b8d89593-c7de-4aa6-a126-89879367c76e",
 	 "type": [
 	   "VerifiableCredential",
 	   "PermanentResidentCard"
@@ -184,9 +185,11 @@ func TestIssueThresholdCredential(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, signedCredentialDoc)
 
+		log.Println(string(signedCredentialDoc.Content))
+
 		err = holder.Store(signedCredentialDoc)
 		require.NoError(t, err)
-
+		log.Println(signedCredentialDoc.ID)
 		signedCredentialDoc2, err := holder.Get(Credential, signedCredentialDoc.ID, signedCredentialDoc.CollectionID)
 		require.NoError(t, err)
 		require.NotNil(t, signedCredentialDoc2)

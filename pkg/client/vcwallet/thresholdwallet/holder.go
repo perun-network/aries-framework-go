@@ -179,7 +179,7 @@ func (c *Holder) handleIssueCredential() error {
 			case credential.OfferCredentialMsgTypeV2:
 				log.Println("Received offer")
 				arg, options, err = c.ReplayOffer(event.Message)
-				err = saveOptionsIfNoError(err, db, event.Message, options)
+				err = SaveOptionsIfNoError(err, db, event.Message, options)
 			case credential.IssueCredentialMsgTypeV2:
 				log.Println("Received credential")
 				arg, _, err = c.ReplayCredential(db, event.Message)
