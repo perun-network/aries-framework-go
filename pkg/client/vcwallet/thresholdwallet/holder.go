@@ -122,7 +122,7 @@ func (c *Holder) CustomHandler(actions chan service.DIDCommAction, credentialHan
 		return err
 	}
 
-	err = c.didexchange.RegisterActionEvent(actions)
+	err = c.issuecredential.RegisterActionEvent(actions)
 	if err != nil {
 		return fmt.Errorf("failed to register channel for %s: %w", c.userID, err)
 	}
