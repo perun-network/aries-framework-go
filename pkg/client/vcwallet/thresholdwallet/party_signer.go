@@ -153,7 +153,7 @@ func (c *PartySigner) CustomHandler(actions chan service.DIDCommAction, credenti
 		return err
 	}
 
-	err = c.didexchange.RegisterActionEvent(actions)
+	err = c.issuecredential.RegisterActionEvent(actions)
 	if err != nil {
 		return fmt.Errorf("failed to register channel for %s: %w", c.userID, err)
 	}
