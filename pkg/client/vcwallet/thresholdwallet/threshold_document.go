@@ -12,6 +12,7 @@ type ContentType string
 
 const (
 	Credential     ContentType = "credential"
+	Proof          ContentType = "proof"
 	Precomputation ContentType = "precomputation"
 	PublicKey      ContentType = "public_key"
 
