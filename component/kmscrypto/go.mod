@@ -4,7 +4,7 @@
 
 module github.com/hyperledger/aries-framework-go/component/kmscrypto
 
-go 1.20
+go 1.22.0
 
 require (
 	github.com/IBM/mathlib v0.0.3-0.20230605104224-932ab92f2ce0
@@ -19,9 +19,10 @@ require (
 	github.com/hyperledger/aries-framework-go/component/storageutil v0.0.0-20230427134832-0c9969493bd3
 	github.com/hyperledger/aries-framework-go/spi v0.0.0-20230417184158-344a7f82c4c2
 	github.com/hyperledger/ursa-wrapper-go v0.3.1
-	github.com/stretchr/testify v1.8.1
+	github.com/perun-network/bbs-plus-threshold-wallet v0.0.0-00010101000000-000000000000
+	github.com/stretchr/testify v1.9.0
 	github.com/teserakt-io/golang-ed25519 v0.0.0-20210104091850-3888c087a4c8
-	golang.org/x/crypto v0.1.0
+	golang.org/x/crypto v0.28.0
 	google.golang.org/protobuf v1.28.1
 )
 
@@ -34,7 +35,7 @@ require (
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	golang.org/x/sys v0.2.0 // indirect
+	golang.org/x/sys v0.26.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
@@ -42,4 +43,5 @@ require (
 replace (
 	github.com/hyperledger/aries-framework-go/component/log => ../log
 	github.com/hyperledger/aries-framework-go/spi => ../../spi
+	github.com/perun-network/bbs-plus-threshold-wallet => ../../../../threshold-bbs-plus-signatures/
 )

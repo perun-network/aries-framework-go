@@ -248,10 +248,10 @@ func (c *Holder) Store(document *Document) error {
 		if err != nil {
 			return fmt.Errorf("add new credential to wallet: %w", err)
 		}
-	case Precomputation, PublicKey:
+	case Precomputation, PublicKey, Proof:
 		metadata, err := newMetadata(document)
 		if err != nil {
-			return fmt.Errorf("create signature: %w", err)
+			return fmt.Errorf("store precomputation, publickey: %w", err)
 		}
 		metadataBytes, err := json.Marshal(metadata)
 		if err != nil {
@@ -263,6 +263,7 @@ func (c *Holder) Store(document *Document) error {
 		if err != nil {
 			return fmt.Errorf("add metadata to collection: %w", err)
 		}
+
 	default:
 		return errors.New("unknown document type")
 	}

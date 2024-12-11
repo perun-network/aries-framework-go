@@ -6,7 +6,7 @@ module github.com/hyperledger/aries-framework-go
 
 // TODO (#2815): Remove circular dependency between the main module and component/storage/edv
 
-go 1.20
+go 1.22.0
 
 require (
 	github.com/IBM/mathlib v0.0.3-0.20230605104224-932ab92f2ce0
@@ -35,8 +35,8 @@ require (
 	github.com/piprate/json-gold v0.5.1-0.20230111113000-6ddbe6e6f19f
 	github.com/pkg/errors v0.9.1
 	github.com/rs/cors v1.7.0
-	github.com/stretchr/testify v1.8.1
-	golang.org/x/crypto v0.1.0
+	github.com/stretchr/testify v1.9.0
+	golang.org/x/crypto v0.28.0
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
 	nhooyr.io/websocket v1.8.3
 )
@@ -65,7 +65,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/pquerna/cachecontrol v0.1.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	github.com/stretchr/objx v0.5.0 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/teserakt-io/golang-ed25519 v0.0.0-20210104091850-3888c087a4c8 // indirect
 	github.com/tidwall/gjson v1.14.3 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
@@ -74,13 +74,15 @@ require (
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
-	golang.org/x/sys v0.12.0 // indirect
+	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/time v0.1.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
-replace github.com/hyperledger/aries-framework-go/component/models => ./component/models
-
-replace github.com/hyperledger/aries-framework-go/component/kmscrypto => ./component/kmscrypto
+replace (
+	github.com/hyperledger/aries-framework-go/component/kmscrypto => ./component/kmscrypto
+	github.com/hyperledger/aries-framework-go/component/models => ./component/models
+	github.com/perun-network/bbs-plus-threshold-wallet => ../threshold-bbs-plus-signatures/
+)
